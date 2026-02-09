@@ -1,9 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import InputField from '../../components/common/InputField';
-import Button from '../../components/common/Button';
-import '../../styles/Login.css';
+import '../../styles/Auth.css';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -15,10 +13,8 @@ function Login() {
   const { login, logout, user, userProfile, loading } = useAuth();
   const navigate = useNavigate();
 
-  // Check if user is already logged in
   useEffect(() => {
     if (!loading && user && userProfile) {
-      // User is already logged in - show prompt to logout or go to dashboard
       setShowLogoutPrompt(true);
     }
   }, [user, userProfile, loading]);
@@ -55,7 +51,6 @@ function Login() {
 
     try {
       await login(email, password);
-      // After successful login, redirect will happen automatically
     } catch (err) {
       console.error('Login failed:', err);
       
@@ -77,116 +72,185 @@ function Login() {
     }
   };
 
-  // Show loading during initial auth check
   if (loading) {
     return (
-      <div className="login-page">
-        <div className="login-container">
-          <div className="loading">Checking authentication...</div>
+      <div className="auth-layout">
+        <div className="auth-form-panel" style={{ width: '100%' }}>
+          <div className="auth-loading">Checking authentication...</div>
         </div>
       </div>
     );
   }
 
-  // If user is already logged in, show logout prompt
   if (showLogoutPrompt && user && userProfile) {
     return (
-      <div className="login-page">
-        <div className="login-container">
-          <div className="login-header">
-            <div className="logo">👤</div>
-            <h1>Already Logged In</h1>
-            <h2>You are logged in as {userProfile.name}</h2>
-          </div>
-
-          <div className="success-message">
-            <p>You are currently logged in.</p>
-            <p>Role: <strong>{userProfile.role}</strong></p>
-          </div>
-
-          <div className="login-form">
-            <Button 
-              onClick={goToDashboard}
-              variant="primary"
-            >
-              Go to Dashboard
-            </Button>
-
-            <Button 
-              onClick={handleLogout}
-              variant="secondary"
-            >
-              Logout
-            </Button>
-          </div>
-
-          {error && (
-            <div className="error-message" style={{ marginTop: '16px' }}>
-              {error}
+      <div className="auth-layout">
+        {/* Brand Panel */}
+        <div className="auth-brand-panel">
+          <div className="auth-brand-content">
+            <div className="auth-brand-logo">
+              <div className="auth-brand-mark">R</div>
+              <div className="auth-brand-name">RetailOps</div>
             </div>
-          )}
+
+            <h1 className="auth-brand-headline">
+              Manage your retail operations with confidence
+            </h1>
+
+            <p className="auth-brand-description">
+              Track sales, manage exhibitions, and analyze performance — all in one place.
+            </p>
+          </div>
+
+          <div className="auth-brand-footer">
+            © 2024 RetailOps. Internal use only.
+          </div>
+        </div>
+
+        {/* Form Panel */}
+        <div className="auth-form-panel">
+          <div className="auth-form-container">
+            <div className="auth-logged-in-state">
+              <div className="auth-logged-in-icon">✓</div>
+              <h2 className="auth-logged-in-title">You're already signed in</h2>
+              <p className="auth-logged-in-text">
+                Signed in as <strong>{userProfile.name}</strong> ({userProfile.role})
+              </p>
+
+              {error && (
+                <div className="auth-alert auth-alert-error">
+                  {error}
+                </div>
+              )}
+
+              <div className="auth-logged-in-actions">
+                <button onClick={goToDashboard} className="auth-submit-btn">
+                  Go to Dashboard
+                </button>
+                <button onClick={handleLogout} className="auth-secondary-btn">
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Show login form
   return (
-    <div className="login-page">
-      <div className="login-container">
-        <div className="login-header">
-          <div className="logo">👔</div>
-          <h1>Clothing Brand Management</h1>
-          <h2>Welcome Back</h2>
+    <div className="auth-layout">
+      {/* Brand Panel */}
+      <div className="auth-brand-panel">
+        <div className="auth-brand-content">
+          <div className="auth-brand-logo">
+            <div className="auth-brand-mark">R</div>
+            <div className="auth-brand-name">RetailOps</div>
+          </div>
+
+          <h1 className="auth-brand-headline">
+            Manage your retail operations with confidence
+          </h1>
+
+          <p className="auth-brand-description">
+            Track sales, manage exhibitions, and analyze performance — all in one place.
+          </p>
+
+          <div className="auth-brand-features">
+            <div className="auth-feature-item">
+              <div className="auth-feature-icon">✓</div>
+              <span>Real-time sales tracking</span>
+            </div>
+            <div className="auth-feature-item">
+              <div className="auth-feature-icon">✓</div>
+              <span>Exhibition management</span>
+            </div>
+            <div className="auth-feature-item">
+              <div className="auth-feature-icon">✓</div>
+              <span>Analytics & insights</span>
+            </div>
+          </div>
         </div>
 
-        <form onSubmit={handleLogin} className="login-form">
+        <div className="auth-brand-footer">
+          © 2024 RetailOps. Internal use only.
+        </div>
+      </div>
+
+      {/* Form Panel */}
+      <div className="auth-form-panel">
+        <div className="auth-form-container">
+          <div className="auth-form-header">
+            <h2 className="auth-form-title">Sign in to your account</h2>
+            <p className="auth-form-subtitle">
+              Enter your credentials to access the dashboard
+            </p>
+          </div>
+
           {error && (
-            <div className="error-message">
+            <div className="auth-alert auth-alert-error">
               {error}
             </div>
           )}
 
-          <InputField
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter your email"
-            disabled={isLoading}
-            required
-          />
+          <form onSubmit={handleLogin} className="auth-form">
+            <div className="auth-form-group">
+              <label htmlFor="email" className="auth-form-label">
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                className="auth-form-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                disabled={isLoading}
+                required
+                autoComplete="email"
+              />
+            </div>
 
-          <InputField
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter your password"
-            disabled={isLoading}
-            required
-          />
+            <div className="auth-form-group">
+              <label htmlFor="password" className="auth-form-label">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                className="auth-form-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                disabled={isLoading}
+                required
+                autoComplete="current-password"
+              />
+            </div>
 
-          <Button 
-            type="submit" 
-            disabled={isLoading}
-            variant="primary"
-          >
-            {isLoading ? 'Logging in...' : 'Login'}
-          </Button>
-        </form>
+            <div className="auth-form-actions">
+              <button 
+                type="submit" 
+                className="auth-submit-btn"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Signing in...' : 'Sign in'}
+              </button>
+            </div>
+          </form>
 
-        <div className="login-footer">
-          <p>
-            Don't have an account?{' '}
-            <button 
-              className="link-button" 
-              onClick={() => navigate('/register')}
-              disabled={isLoading}
-            >
-              Register here
-            </button>
-          </p>
+          <div className="auth-form-footer">
+            <p className="auth-form-footer-text">
+              Don't have an account?{' '}
+              <button 
+                className="auth-form-link" 
+                onClick={() => navigate('/register')}
+                disabled={isLoading}
+              >
+                Create account
+              </button>
+            </p>
+          </div>
         </div>
       </div>
     </div>

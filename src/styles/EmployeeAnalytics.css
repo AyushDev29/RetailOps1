@@ -14,6 +14,12 @@
   align-items: center;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .analytics-header h1 {
   margin: 0 0 10px 0;
   color: #333;

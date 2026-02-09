@@ -1,11 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../services/firebase';
-import InputField from '../../components/common/InputField';
-import Button from '../../components/common/Button';
-import '../../styles/Login.css';
+import '../../styles/Auth.css';
 
 function Register() {
   const [formData, setFormData] = useState({
@@ -31,7 +29,6 @@ function Register() {
     setError('');
     setSuccess(false);
 
-    // Validation
     if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
       setError('Please fill in all fields');
       return;
@@ -50,7 +47,6 @@ function Register() {
     setIsLoading(true);
 
     try {
-      // Step 1: Create user in Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         formData.email,
@@ -59,32 +55,27 @@ function Register() {
 
       const user = userCredential.user;
 
-      // Step 2: Create user profile in Firestore with proper timestamp
       await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
         email: formData.email,
         name: formData.name,
-        role: 'employee', // Default role - can only be changed manually in Firestore
+        role: 'employee',
         isActive: true,
-        createdAt: serverTimestamp() // Use Firestore server timestamp
+        createdAt: serverTimestamp()
       });
 
-      // Step 3: IMMEDIATELY log the user out (no auto-login)
       await signOut(auth);
-
-      // Step 4: Show success message
       setSuccess(true);
 
-      // Step 5: Redirect to login page after 2 seconds
       setTimeout(() => {
         navigate('/login');
-      }, 2000);
+      }, 2500);
 
     } catch (err) {
       console.error('Registration failed:', err);
 
       if (err.code === 'auth/email-already-in-use') {
-        setError('Email already registered. Please login instead.');
+        setError('Email already registered. Please sign in instead.');
       } else if (err.code === 'auth/invalid-email') {
         setError('Invalid email address');
       } else if (err.code === 'auth/weak-password') {
@@ -96,19 +87,41 @@ function Register() {
     }
   };
 
-  // If registration successful, show success message
   if (success) {
     return (
-      <div className="login-page">
-        <div className="login-container">
-          <div className="login-header">
-            <div className="logo">✅</div>
-            <h1>Registration Successful!</h1>
-            <h2>Redirecting to login...</h2>
+      <div className="auth-layout">
+        {/* Brand Panel */}
+        <div className="auth-brand-panel">
+          <div className="auth-brand-content">
+            <div className="auth-brand-logo">
+              <div className="auth-brand-mark">R</div>
+              <div className="auth-brand-name">RetailOps</div>
+            </div>
+
+            <h1 className="auth-brand-headline">
+              Welcome to the team
+            </h1>
+
+            <p className="auth-brand-description">
+              Your account has been created successfully. You can now sign in and start managing operations.
+            </p>
           </div>
-          <div className="success-message">
-            <p>Your account has been created successfully.</p>
-            <p>Please login with your credentials.</p>
+
+          <div className="auth-brand-footer">
+            © 2024 RetailOps. Internal use only.
+          </div>
+        </div>
+
+        {/* Form Panel */}
+        <div className="auth-form-panel">
+          <div className="auth-form-container">
+            <div className="auth-success-state">
+              <div className="auth-success-icon">✓</div>
+              <h2 className="auth-success-title">Account created successfully</h2>
+              <p className="auth-success-text">
+                Redirecting you to sign in...
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -116,85 +129,159 @@ function Register() {
   }
 
   return (
-    <div className="login-page">
-      <div className="login-container">
-        <div className="login-header">
-          <div className="logo">👔</div>
-          <h1>Clothing Brand Management</h1>
-          <h2>Create Account</h2>
+    <div className="auth-layout">
+      {/* Brand Panel */}
+      <div className="auth-brand-panel">
+        <div className="auth-brand-content">
+          <div className="auth-brand-logo">
+            <div className="auth-brand-mark">R</div>
+            <div className="auth-brand-name">RetailOps</div>
+          </div>
+
+          <h1 className="auth-brand-headline">
+            Join your team and start managing sales
+          </h1>
+
+          <p className="auth-brand-description">
+            Create your account to access the retail management platform.
+          </p>
+
+          <div className="auth-brand-features">
+            <div className="auth-feature-item">
+              <div className="auth-feature-icon">✓</div>
+              <span>Instant access to dashboard</span>
+            </div>
+            <div className="auth-feature-item">
+              <div className="auth-feature-icon">✓</div>
+              <span>Secure employee account</span>
+            </div>
+            <div className="auth-feature-item">
+              <div className="auth-feature-icon">✓</div>
+              <span>Role-based permissions</span>
+            </div>
+          </div>
         </div>
 
-        <form onSubmit={handleRegister} className="login-form">
+        <div className="auth-brand-footer">
+          © 2024 RetailOps. Internal use only.
+        </div>
+      </div>
+
+      {/* Form Panel */}
+      <div className="auth-form-panel">
+        <div className="auth-form-container">
+          <div className="auth-form-header">
+            <h2 className="auth-form-title">Create your account</h2>
+            <p className="auth-form-subtitle">
+              Fill in your details to get started
+            </p>
+          </div>
+
           {error && (
-            <div className="error-message">
+            <div className="auth-alert auth-alert-error">
               {error}
             </div>
           )}
 
-          <InputField
-            label="Full Name"
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            placeholder="Enter your full name"
-            disabled={isLoading}
-            required
-          />
+          <form onSubmit={handleRegister} className="auth-form">
+            <div className="auth-form-group">
+              <label htmlFor="name" className="auth-form-label">
+                Full name
+              </label>
+              <input
+                id="name"
+                type="text"
+                name="name"
+                className="auth-form-input"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="John Doe"
+                disabled={isLoading}
+                required
+                autoComplete="name"
+              />
+            </div>
 
-          <InputField
-            label="Email"
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            placeholder="Enter your email"
-            disabled={isLoading}
-            required
-          />
+            <div className="auth-form-group">
+              <label htmlFor="email" className="auth-form-label">
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                name="email"
+                className="auth-form-input"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="you@company.com"
+                disabled={isLoading}
+                required
+                autoComplete="email"
+              />
+            </div>
 
-          <InputField
-            label="Password"
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            placeholder="Enter password (min 6 characters)"
-            disabled={isLoading}
-            required
-          />
+            <div className="auth-form-group">
+              <label htmlFor="password" className="auth-form-label">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                name="password"
+                className="auth-form-input"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Minimum 6 characters"
+                disabled={isLoading}
+                required
+                autoComplete="new-password"
+              />
+              <span className="auth-form-helper">
+                Must be at least 6 characters long
+              </span>
+            </div>
 
-          <InputField
-            label="Confirm Password"
-            type="password"
-            name="confirmPassword"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            placeholder="Confirm your password"
-            disabled={isLoading}
-            required
-          />
+            <div className="auth-form-group">
+              <label htmlFor="confirmPassword" className="auth-form-label">
+                Confirm password
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                name="confirmPassword"
+                className="auth-form-input"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                placeholder="Re-enter your password"
+                disabled={isLoading}
+                required
+                autoComplete="new-password"
+              />
+            </div>
 
-          <Button 
-            type="submit" 
-            disabled={isLoading}
-            variant="primary"
-          >
-            {isLoading ? 'Creating Account...' : 'Register'}
-          </Button>
-        </form>
+            <div className="auth-form-actions">
+              <button 
+                type="submit" 
+                className="auth-submit-btn"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Creating account...' : 'Create account'}
+              </button>
+            </div>
+          </form>
 
-        <div className="login-footer">
-          <p>
-            Already have an account?{' '}
-            <button 
-              className="link-button" 
-              onClick={() => navigate('/login')}
-              disabled={isLoading}
-            >
-              Login here
-            </button>
-          </p>
+          <div className="auth-form-footer">
+            <p className="auth-form-footer-text">
+              Already have an account?{' '}
+              <button 
+                className="auth-form-link" 
+                onClick={() => navigate('/login')}
+                disabled={isLoading}
+              >
+                Sign in
+              </button>
+            </p>
+          </div>
         </div>
       </div>
     </div>

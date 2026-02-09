@@ -76,6 +76,10 @@ const EmployeeAnalytics = () => {
       console.error('Logout failed:', err);
     }
   };
+
+  const handleBackToDashboard = () => {
+    navigate('/employee');
+  };
   
   // Get period-accurate label for comparison chart
   const getComparisonLabel = () => {
@@ -139,9 +143,14 @@ const EmployeeAnalytics = () => {
               🟢 Live Data
             </span>
           </div>
-          <button onClick={handleLogout} className="btn btn-logout">
-            Logout
-          </button>
+          <div className="header-actions">
+            <button onClick={handleBackToDashboard} className="btn btn-secondary">
+              Back to Dashboard
+            </button>
+            <button onClick={handleLogout} className="btn btn-logout">
+              Logout
+            </button>
+          </div>
         </div>
       </div>
       
