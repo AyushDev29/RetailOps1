@@ -23,6 +23,7 @@ const EmployeeAnalytics = () => {
   });
   
   const [exhibitions, setExhibitions] = useState([]);
+  const [exhibitionMap, setExhibitionMap] = useState({});
   
   // Fetch analytics using custom hook
   const { analytics, loading, error } = useAnalytics(filters);
@@ -36,6 +37,12 @@ const EmployeeAnalytics = () => {
     try {
       const data = await getExhibitionsForFilter();
       setExhibitions(data);
+      // Build exhibition map for ID -> location lookup
+      const map = {};
+      data.forEach(ex => {
+        map[ex.id] = ex.location;
+      });
+      setExhibitionMap(map);
     } catch (err) {
       console.error('Error loading exhibitions:', err);
     }
@@ -68,6 +75,13 @@ const EmployeeAnalytics = () => {
     } catch (err) {
       console.error('Logout failed:', err);
     }
+  };
+  
+  // Get period-accurate label for comparison chart
+  const getComparisonLabel = () => {
+    if (filters.period === 'daily') return 'Today vs Yesterday';
+    if (filters.period === 'weekly') return 'This Week vs Last Week';
+    return 'Current Month vs Last Month';
   };
   
   // Format hour for display (IST)
@@ -121,6 +135,9 @@ const EmployeeAnalytics = () => {
           <div>
             <h1>Employee Analytics</h1>
             <p>Welcome, {userProfile?.name || user?.email}</p>
+            <span className="live-indicator" title="Data updates in real-time">
+              🟢 Live Data
+            </span>
           </div>
           <button onClick={handleLogout} className="btn btn-logout">
             Logout
@@ -218,7 +235,7 @@ const EmployeeAnalytics = () => {
       {/* Stats Cards */}
       <div className="stats-grid">
         <StatsCard
-          title="Peak Sales Time"
+          title="Peak Sales Time (IST)"
           value={`${formatHour(analytics.peakSalesTime.hour)} (${analytics.peakSalesTime.count} sales)`}
           icon="🕐"
         />
@@ -242,47 +259,65 @@ const EmployeeAnalytics = () => {
       {/* Charts Section */}
       <div className="charts-grid">
         {/* Sales Comparison Chart */}
-        <ChartWrapper title="Sales Comparison (Current vs Previous Period)">
-          <BarChart
-            data={{
-              labels: ['Previous Period', 'Current Period'],
-              values: [
-                analytics.dailySalesComparison.previous,
-                analytics.dailySalesComparison.current
-              ]
-            }}
-          />
+        <ChartWrapper title={getComparisonLabel()}>
+          {analytics.dailySalesComparison.current === 0 && analytics.dailySalesComparison.previous === 0 ? (
+            <div className="chart-empty">No data for selected period</div>
+          ) : (
+            <BarChart
+              data={{
+                labels: ['Previous Period', 'Current Period'],
+                values: [
+                  analytics.dailySalesComparison.previous,
+                  analytics.dailySalesComparison.current
+                ]
+              }}
+            />
+          )}
         </ChartWrapper>
         
         {/* Gender Distribution Chart */}
         <ChartWrapper title="Sales by Gender">
-          <PieChart
-            data={{
-              labels: Object.keys(analytics.peakSalesGender),
-              values: Object.values(analytics.peakSalesGender)
-            }}
-          />
+          {Object.values(analytics.peakSalesGender).every(v => v === 0) ? (
+            <div className="chart-empty">No data for selected period</div>
+          ) : (
+            <PieChart
+              data={{
+                labels: Object.keys(analytics.peakSalesGender),
+                values: Object.values(analytics.peakSalesGender)
+              }}
+            />
+          )}
         </ChartWrapper>
         
         {/* Age Group Distribution Chart */}
         <ChartWrapper title="Sales by Age Group">
-          <BarChart
-            data={{
-              labels: Object.keys(analytics.peakSalesAgeGroup),
-              values: Object.values(analytics.peakSalesAgeGroup)
-            }}
-          />
+          {Object.values(analytics.peakSalesAgeGroup).every(v => v === 0) ? (
+            <div className="chart-empty">No data for selected period</div>
+          ) : (
+            <BarChart
+              data={{
+                labels: Object.keys(analytics.peakSalesAgeGroup),
+                values: Object.values(analytics.peakSalesAgeGroup)
+              }}
+            />
+          )}
         </ChartWrapper>
         
         {/* Exhibition Sales Chart */}
-        {analytics.exhibitionSalesComparison.length > 0 && (
+        {analytics.exhibitionSalesComparison.length > 0 ? (
           <ChartWrapper title="Sales by Exhibition">
             <BarChart
               data={{
-                labels: analytics.exhibitionSalesComparison.map(ex => ex.exhibitionId),
+                labels: analytics.exhibitionSalesComparison.map(ex => 
+                  exhibitionMap[ex.exhibitionId] || 'Unknown Exhibition'
+                ),
                 values: analytics.exhibitionSalesComparison.map(ex => ex.count)
               }}
             />
+          </ChartWrapper>
+        ) : (
+          <ChartWrapper title="Sales by Exhibition">
+            <div className="chart-empty">No exhibition sales for selected period</div>
           </ChartWrapper>
         )}
       </div>

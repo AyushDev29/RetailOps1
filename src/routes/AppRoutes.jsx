@@ -8,6 +8,7 @@ import PreBooking from '../pages/dashboard/PreBooking';
 import Exhibition from '../pages/dashboard/Exhibition';
 import EmployeeAnalytics from '../pages/analytics/EmployeeAnalytics';
 import OwnerDashboard from '../pages/owner/OwnerDashboard';
+import OwnerAnalytics from '../pages/owner/OwnerAnalytics';
 import ProtectedRoute from '../components/layout/ProtectedRoute';
 
 function AppRoutes() {
@@ -65,6 +66,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute requiredRole="owner">
             <OwnerDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/owner/analytics" 
+        element={
+          <ProtectedRoute requiredRole="owner">
+            <OwnerAnalytics />
           </ProtectedRoute>
         } 
       />

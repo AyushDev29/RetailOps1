@@ -226,9 +226,14 @@ const OwnerDashboard = () => {
             <h1>Owner Dashboard</h1>
             <p>Welcome, {userProfile?.name || user?.email}</p>
           </div>
-          <button onClick={handleLogout} className="btn btn-logout">
-            Logout
-          </button>
+          <div className="header-actions">
+            <button onClick={() => navigate('/owner/analytics')} className="btn btn-primary">
+              View Analytics
+            </button>
+            <button onClick={handleLogout} className="btn btn-logout">
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 
