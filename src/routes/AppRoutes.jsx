@@ -1,11 +1,7 @@
-import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from '../pages/auth/Login';
 import Register from '../pages/auth/Register';
 import EmployeeDashboard from '../pages/dashboard/EmployeeDashboard';
-import DailySales from '../pages/dashboard/DailySales';
-import PreBooking from '../pages/dashboard/PreBooking';
-import Exhibition from '../pages/dashboard/Exhibition';
 import EmployeeAnalytics from '../pages/analytics/EmployeeAnalytics';
 import OwnerDashboard from '../pages/owner/OwnerDashboard';
 import OwnerAnalytics from '../pages/owner/OwnerAnalytics';
@@ -28,30 +24,6 @@ function AppRoutes() {
         } 
       />
       <Route 
-        path="/employee/daily-sales" 
-        element={
-          <ProtectedRoute requiredRole="employee">
-            <DailySales />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/employee/pre-booking" 
-        element={
-          <ProtectedRoute requiredRole="employee">
-            <PreBooking />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/employee/exhibition" 
-        element={
-          <ProtectedRoute requiredRole="employee">
-            <Exhibition />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
         path="/employee/analytics" 
         element={
           <ProtectedRoute requiredRole="employee">
@@ -60,7 +32,7 @@ function AppRoutes() {
         } 
       />
 
-      {/* Owner Routes - Owner can access everything */}
+      {/* Owner Routes */}
       <Route 
         path="/owner" 
         element={
