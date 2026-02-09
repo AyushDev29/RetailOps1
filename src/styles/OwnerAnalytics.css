@@ -171,10 +171,17 @@
 }
 
 .anomalies-list h4 {
-  margin: 0 0 12px 0;
+  margin: 0 0 8px 0;
   font-size: 14px;
   color: #333;
   font-weight: 600;
+}
+
+.anomaly-description {
+  margin: 0 0 12px 0;
+  font-size: 11px;
+  color: #666;
+  font-style: italic;
 }
 
 .anomaly-item {
@@ -203,6 +210,43 @@
 .anomaly-text {
   font-size: 13px;
   font-weight: 500;
+}
+
+.anomaly-baseline {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.no-anomalies {
+  margin-top: 20px;
+  padding: 16px;
+  background: #d4edda;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.no-anomalies p {
+  margin: 0;
+  font-size: 13px;
+  color: #155724;
+  font-weight: 500;
+}
+
+/* Empty State */
+.empty-state {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.empty-state p {
+  margin: 0;
+  color: #856404;
+  font-size: 14px;
 }
 
 /* Buttons */

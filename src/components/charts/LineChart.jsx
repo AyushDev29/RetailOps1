@@ -1,7 +1,6 @@
-import React from 'react';
 import './LineChart.css';
 
-function LineChart({ data }) {
+function LineChart({ data, anomalies = [] }) {
   if (!data || !data.labels || !data.values) {
     return <div className="chart-empty">No data available</div>;
   }
@@ -9,6 +8,15 @@ function LineChart({ data }) {
   const maxValue = Math.max(...data.values, 1);
   const minValue = Math.min(...data.values, 0);
   const range = maxValue - minValue || 1;
+
+  // Create anomaly index map for quick lookup
+  const anomalyMap = {};
+  anomalies.forEach(anomaly => {
+    const index = data.labels.indexOf(anomaly.date);
+    if (index !== -1) {
+      anomalyMap[index] = anomaly;
+    }
+  });
 
   return (
     <div className="line-chart">
@@ -40,18 +48,31 @@ function LineChart({ data }) {
           strokeWidth="3"
         />
 
-        {/* Data points */}
+        {/* Data points with anomaly highlighting */}
         {data.values.map((value, index) => {
           const x = (index / (data.values.length - 1)) * 800;
           const y = 300 - ((value - minValue) / range) * 280;
+          const isAnomaly = anomalyMap[index];
+          
           return (
-            <circle
-              key={index}
-              cx={x}
-              cy={y}
-              r="4"
-              fill="#007bff"
-            />
+            <g key={index}>
+              <circle
+                cx={x}
+                cy={y}
+                r={isAnomaly ? "6" : "4"}
+                fill={isAnomaly ? (isAnomaly.type === 'spike' ? '#28a745' : '#dc3545') : '#007bff'}
+              />
+              {isAnomaly && (
+                <text
+                  x={x}
+                  y={y - 12}
+                  textAnchor="middle"
+                  fontSize="16"
+                >
+                  {isAnomaly.type === 'spike' ? '📈' : '📉'}
+                </text>
+              )}
+            </g>
           );
         })}
       </svg>
