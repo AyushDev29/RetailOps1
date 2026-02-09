@@ -40,7 +40,10 @@ const OwnerAnalytics = () => {
             <h1>Owner Analytics</h1>
             <p>Welcome, {userProfile?.name || user?.email}</p>
             <span className="live-indicator" title="Revenue data updates in real-time">
-              🟢 Live Data
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="12" r="10"/>
+              </svg>
+              Live Data
             </span>
           </div>
           <div className="header-actions">
@@ -68,22 +71,41 @@ const OwnerAnalytics = () => {
         <StatsCard
           title="Overall Revenue"
           value={formatCurrency(analytics.overallRevenue)}
-          icon="💰"
+          icon={
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"/>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          }
         />
         <StatsCard
           title="Daily Sales Revenue"
           value={formatCurrency(analytics.dailySalesRevenue)}
-          icon="🏪"
+          icon={
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          }
         />
         <StatsCard
           title="Exhibition Sales Revenue"
           value={formatCurrency(analytics.exhibitionSalesRevenue)}
-          icon="🎪"
+          icon={
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+            </svg>
+          }
         />
         <StatsCard
           title="Top Product Revenue"
           value={formatCurrency(analytics.topSellingProduct.revenue)}
-          icon="⭐"
+          icon={
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          }
         />
       </div>
 
@@ -152,14 +174,24 @@ const OwnerAnalytics = () => {
               />
               {analytics.anomalies.length > 0 ? (
                 <div className="anomalies-list">
-                  <h4>Detected Anomalies:</h4>
+                  <h4>Detected Anomalies</h4>
                   <p className="anomaly-description">
                     Spike: Revenue &gt; 2× rolling 7-day average | Drop: Revenue &lt; 0.5× rolling 7-day average
                   </p>
                   {analytics.anomalies.map((anomaly, index) => (
                     <div key={index} className={`anomaly-item ${anomaly.type}`}>
                       <span className="anomaly-icon">
-                        {anomaly.type === 'spike' ? '📈' : '📉'}
+                        {anomaly.type === 'spike' ? (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                            <polyline points="17 6 23 6 23 12"/>
+                          </svg>
+                        ) : (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/>
+                            <polyline points="17 18 23 18 23 12"/>
+                          </svg>
+                        )}
                       </span>
                       <span className="anomaly-text">
                         <strong>{anomaly.type === 'spike' ? 'Spike' : 'Drop'}</strong> on {anomaly.date}: {formatCurrency(anomaly.value)}

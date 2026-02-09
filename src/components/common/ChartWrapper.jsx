@@ -1,4 +1,5 @@
 import React from 'react';
+import './ChartWrapper.css';
 
 function ChartWrapper({ title, children }) {
   return (
