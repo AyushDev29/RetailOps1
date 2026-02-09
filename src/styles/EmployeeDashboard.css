@@ -1,0 +1,311 @@
+.employee-dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.dashboard-header {
+  margin-bottom: 30px;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.dashboard-header h1 {
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+.dashboard-header p {
+  margin: 0;
+  color: #666;
+}
+
+.dashboard-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  font-size: 18px;
+  color: #666;
+}
+
+.alert {
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.alert-error {
+  background-color: #fee;
+  color: #c33;
+  border: 1px solid #fcc;
+}
+
+.alert-success {
+  background-color: #efe;
+  color: #3c3;
+  border: 1px solid #cfc;
+}
+
+.dashboard-section {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.dashboard-section h2 {
+  margin: 0 0 20px 0;
+  color: #333;
+  font-size: 20px;
+}
+
+/* Exhibition Management */
+.active-exhibition {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.exhibition-info p {
+  margin: 4px 0;
+}
+
+.status-active {
+  color: #28a745;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.exhibition-form {
+  max-width: 500px;
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Order Type Toggle */
+.order-type-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 10px 20px;
+  border: 2px solid #ddd;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.toggle-btn:hover {
+  border-color: #007bff;
+}
+
+.toggle-btn.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+@media (max-width: 768px) {
+  .order-type-toggle {
+    flex-direction: column;
+  }
+}
+
+.info-message {
+  padding: 12px;
+  background: #e7f3ff;
+  border-left: 4px solid #007bff;
+  margin-bottom: 20px;
+  border-radius: 4px;
+}
+
+.warning-message {
+  padding: 12px;
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+  margin-bottom: 20px;
+  border-radius: 4px;
+  color: #856404;
+  font-weight: 500;
+}
+
+/* Buttons */
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #545b62;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+}
+
+.btn-success {
+  background: #28a745;
+  color: white;
+}
+
+.btn-success:hover {
+  background: #218838;
+}
+
+.btn-logout {
+  background: #6c757d;
+  color: white;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.btn-logout:hover {
+  background: #545b62;
+}
+
+/* No Products */
+.no-products {
+  padding: 20px;
+  text-align: center;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.no-products p {
+  margin: 0 0 12px 0;
+  color: #666;
+}
+
+/* Pre-bookings List */
+.prebookings-list {
+  display: grid;
+  gap: 16px;
+}
+
+.prebooking-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.prebooking-info p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .employee-dashboard {
+    padding: 12px;
+  }
+
+  .dashboard-section {
+    padding: 16px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .active-exhibition {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .prebooking-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
