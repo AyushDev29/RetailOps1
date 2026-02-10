@@ -7,6 +7,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer
 } from 'recharts';
+import { exportAnalyticsData } from '../../utils/excelUtils';
 import '../../styles/OwnerAnalyticsPro.css';
 
 const OwnerAnalyticsPro = () => {
@@ -34,6 +35,15 @@ const OwnerAnalyticsPro = () => {
       navigate('/login');
     } catch (err) {
       console.error('Logout failed:', err);
+    }
+  };
+
+  const handleExportAnalytics = () => {
+    try {
+      exportAnalyticsData(analytics, filters);
+    } catch (err) {
+      console.error('Export failed:', err);
+      alert('Failed to export analytics data');
     }
   };
 
@@ -120,6 +130,9 @@ const OwnerAnalyticsPro = () => {
             <p className="subtitle">Comprehensive insights for data-driven decisions</p>
           </div>
           <div className="header-actions">
+            <button onClick={handleExportAnalytics} className="btn-secondary">
+              📊 Export Data
+            </button>
             <button onClick={() => navigate('/owner/dashboard')} className="btn-secondary">
               ← Dashboard
             </button>
@@ -260,6 +273,85 @@ const OwnerAnalyticsPro = () => {
 
       {/* Charts Section */}
       <div className="charts-section">
+        {/* Period Comparison - Bar Chart */}
+        <div className="chart-card chart-wide">
+          <div className="chart-header">
+            <div>
+              <h3>Period Comparison</h3>
+              <p className="chart-subtitle">
+                {filters.dateRange === 'today' && 'Today vs Yesterday'}
+                {filters.dateRange === 'week' && 'This Week vs Last Week'}
+                {filters.dateRange === 'month' && 'This Month vs Last Month'}
+                {filters.dateRange === 'quarter' && 'This Quarter vs Last Quarter'}
+                {filters.dateRange === 'year' && 'This Year vs Last Year'}
+                {filters.dateRange === 'custom' && 'Current Period vs Previous Period'}
+              </p>
+            </div>
+          </div>
+          <div className="chart-body">
+            {analytics.periodComparison ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart 
+                  data={[
+                    {
+                      metric: 'Revenue',
+                      Previous: analytics.periodComparison.revenue.previous,
+                      Current: analytics.periodComparison.revenue.current
+                    },
+                    {
+                      metric: 'Orders',
+                      Previous: analytics.periodComparison.orders.previous,
+                      Current: analytics.periodComparison.orders.current
+                    },
+                    {
+                      metric: 'Items Sold',
+                      Previous: analytics.periodComparison.items.previous,
+                      Current: analytics.periodComparison.items.current
+                    }
+                  ]}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis 
+                    dataKey="metric" 
+                    stroke="#9ca3af" 
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <YAxis 
+                    stroke="#9ca3af" 
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend 
+                    wrapperStyle={{ paddingTop: '10px' }}
+                    iconType="circle"
+                  />
+                  <Bar 
+                    dataKey="Previous" 
+                    fill="#9ca3af" 
+                    radius={[4, 4, 0, 0]} 
+                    animationDuration={1500}
+                    barSize={60}
+                  />
+                  <Bar 
+                    dataKey="Current" 
+                    fill="#2563eb" 
+                    radius={[4, 4, 0, 0]} 
+                    animationDuration={1700}
+                    barSize={60}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="chart-empty">No comparison data available</div>
+            )}
+          </div>
+        </div>
+
         {/* Revenue Trend - Main Chart */}
         <div className="chart-card chart-primary">
           <div className="chart-header">

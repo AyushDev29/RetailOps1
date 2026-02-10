@@ -199,14 +199,19 @@ service cloud.firestore {
     }
     
     // ============================================================================
-    // BILLS COLLECTION
+    // BILLS COLLECTION (STEP 6: PAYMENT RECORDING)
     // ============================================================================
     
     match /bills/{billId} {
       // Employees can create bills
       allow create: if isEmployee() && 
                        isActiveUser() &&
-                       request.resource.data.employeeId == request.auth.uid;
+                       request.resource.data.employeeId == request.auth.uid &&
+                       // STEP 6: Validate initial payment fields
+                       request.resource.data.paymentStatus == 'UNPAID' &&
+                       request.resource.data.payments.size() == 0 &&
+                       request.resource.data.paidAmount == 0 &&
+                       request.resource.data.locked == false;
       
       // Employees can read their own bills
       allow get: if isEmployee() && 
@@ -219,8 +224,35 @@ service cloud.firestore {
       // Owners can read and list all bills
       allow read, list: if isOwner() && isActiveUser();
       
-      // No one can update or delete bills (immutable)
-      allow update, delete: if false;
+      // STEP 6: Employees can APPEND payments to their own bills
+      allow update: if isEmployee() && 
+                       isActiveUser() &&
+                       resource.data.employeeId == request.auth.uid &&
+                       // Bill must not be locked
+                       resource.data.locked == false &&
+                       // CRITICAL: Only payment fields can be modified
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['payments', 'paidAmount', 'dueAmount', 'paymentStatus', 'paidAt', 'locked', 'updatedAt']) &&
+                       // Payments array can only grow (append-only)
+                       request.resource.data.payments.size() > resource.data.payments.size() &&
+                       // Paid amount must increase
+                       request.resource.data.paidAmount >= resource.data.paidAmount &&
+                       // Due amount must decrease or stay same
+                       request.resource.data.dueAmount <= resource.data.dueAmount &&
+                       // Payment status must be valid
+                       request.resource.data.paymentStatus in ['UNPAID', 'PARTIALLY_PAID', 'PAID'] &&
+                       // If fully paid, bill must be locked
+                       (request.resource.data.paymentStatus != 'PAID' || request.resource.data.locked == true) &&
+                       // No overpayment allowed
+                       request.resource.data.paidAmount <= resource.data.totals.payableAmount;
+      
+      // Owners can update bills (for corrections, but not after locked)
+      allow update: if isOwner() && 
+                       isActiveUser() &&
+                       resource.data.locked == false;
+      
+      // No one can delete bills (immutable)
+      allow delete: if false;
     }
     
     // ============================================================================

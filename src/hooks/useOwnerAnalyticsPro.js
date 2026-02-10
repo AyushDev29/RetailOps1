@@ -151,6 +151,30 @@ const calculateAnalytics = (rawData, filters) => {
     lowStockProducts
   });
 
+  // Period comparison data for charts
+  const periodComparison = {
+    revenue: {
+      current: totalRevenue,
+      previous: prevRevenue,
+      growth: revenueGrowth
+    },
+    orders: {
+      current: totalOrders,
+      previous: prevOrders,
+      growth: ordersGrowth
+    },
+    items: {
+      current: totalItemsSold,
+      previous: prevItems,
+      growth: itemsGrowth
+    },
+    aov: {
+      current: avgOrderValue,
+      previous: prevAov,
+      growth: aovGrowth
+    }
+  };
+
   return {
     totalRevenue,
     totalOrders,
@@ -166,7 +190,8 @@ const calculateAnalytics = (rawData, filters) => {
     categoryPerformance,
     employeePerformance,
     lowStockProducts,
-    insights
+    insights,
+    periodComparison
   };
 };
 

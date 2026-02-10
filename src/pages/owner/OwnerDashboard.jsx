@@ -11,6 +11,11 @@ import { getBillById } from '../../services/billStorageService';
 import { generateBill } from '../../services/billingService';
 import { calculateOrder } from '../../services/orderCalculationService';
 import BillPreview from '../../components/billing/BillPreview';
+import { 
+  exportProducts, 
+  importProductsFromExcel, 
+  downloadProductTemplate 
+} from '../../utils/excelUtils';
 import '../../styles/OwnerDashboard.css';
 
 const OwnerDashboard = () => {
@@ -384,6 +389,70 @@ const OwnerDashboard = () => {
     }
   };
 
+  // Handle product export
+  const handleExportProducts = () => {
+    try {
+      exportProducts(products);
+      setSuccess('Products exported successfully!');
+    } catch (err) {
+      setError('Failed to export products: ' + err.message);
+    }
+  };
+
+  // Handle product import
+  const handleImportProducts = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      setLoading(true);
+      setError('');
+      
+      const importedProducts = await importProductsFromExcel(file);
+      
+      if (!window.confirm(`Import ${importedProducts.length} products? This will add them to your database.`)) {
+        return;
+      }
+
+      let successCount = 0;
+      let errorCount = 0;
+      const errors = [];
+
+      for (const product of importedProducts) {
+        try {
+          await createProduct(product);
+          successCount++;
+        } catch (err) {
+          errorCount++;
+          errors.push(`${product.sku}: ${err.message}`);
+        }
+      }
+
+      if (errorCount > 0) {
+        setError(`Imported ${successCount} products. ${errorCount} failed: ${errors.slice(0, 3).join(', ')}`);
+      } else {
+        setSuccess(`Successfully imported ${successCount} products!`);
+      }
+
+      await loadData();
+    } catch (err) {
+      setError('Failed to import products: ' + err.message);
+    } finally {
+      setLoading(false);
+      event.target.value = ''; // Reset file input
+    }
+  };
+
+  // Handle download template
+  const handleDownloadTemplate = () => {
+    try {
+      downloadProductTemplate();
+      setSuccess('Template downloaded successfully!');
+    } catch (err) {
+      setError('Failed to download template: ' + err.message);
+    }
+  };
+
   // Handle logout
   const handleLogout = async () => {
     try {
@@ -604,12 +673,27 @@ const OwnerDashboard = () => {
         <div className="dashboard-section">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h2>Product Management</h2>
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <button onClick={loadData} className="btn btn-primary">
                 🔄 Refresh Stock
               </button>
               <button onClick={handleSyncStock} className="btn btn-primary" style={{ background: '#f59e0b' }}>
                 ⚡ Sync Stock from Orders
+              </button>
+              <button onClick={handleDownloadTemplate} className="btn btn-secondary">
+                📥 Download Template
+              </button>
+              <label className="btn btn-secondary" style={{ cursor: 'pointer', margin: 0 }}>
+                📤 Import Products
+                <input 
+                  type="file" 
+                  accept=".xlsx,.xls" 
+                  onChange={handleImportProducts}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <button onClick={handleExportProducts} className="btn btn-secondary">
+                📊 Export Products
               </button>
               <button onClick={handleSeedProducts} className="btn btn-secondary">
                 Add Sample Products
@@ -1019,7 +1103,13 @@ const OwnerDashboard = () => {
           onClose={() => {
             setShowBill(false);
             setCurrentBill(null);
-          }} 
+          }}
+          onPaymentRecorded={(updatedBill) => {
+            // Update current bill with payment info
+            setCurrentBill(updatedBill);
+            // Refresh bills list
+            loadData();
+          }}
         />
       )}
     </div>

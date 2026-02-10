@@ -9,6 +9,7 @@ import { calculateOrder } from '../../services/orderCalculationService';
 import { generateBill } from '../../services/billingService';
 import { saveBill, getTodaysBills } from '../../services/billStorageService';
 import { deductStockBatch } from '../../services/productService';
+import { recordPayment } from '../../services/paymentService';
 import BillPreview from '../../components/billing/BillPreview';
 import '../../styles/EmployeeDashboard.css';
 
@@ -50,9 +51,29 @@ const EmployeeDashboard = () => {
 
   const [showExhibitionForm, setShowExhibitionForm] = useState(false);
 
+  // Payment recording state (STEP 6)
+  const [paymentMode, setPaymentMode] = useState('CASH');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentReferenceId, setPaymentReferenceId] = useState('');
+
   useEffect(() => {
     loadData();
   }, [user]);
+
+  // Auto-update payment amount when cart changes (STEP 6)
+  useEffect(() => {
+    if (cart.length > 0 && orderType !== 'prebooking') {
+      try {
+        const orderCalc = calculateOrder({ items: cart, employeeDiscount: 0 });
+        const totalAmount = Math.round(orderCalc.summary.grandTotal);
+        setPaymentAmount(totalAmount.toString());
+      } catch (err) {
+        console.error('Error calculating payment amount:', err);
+      }
+    } else {
+      setPaymentAmount('');
+    }
+  }, [cart, orderType]);
 
   const loadData = async () => {
     try {
@@ -344,6 +365,41 @@ const EmployeeDashboard = () => {
           const billId = await saveBill(bill);
           console.log('Bill saved to Firestore with ID:', billId);
           
+          // Record payment immediately (STEP 6)
+          if (paymentAmount && parseFloat(paymentAmount) > 0) {
+            try {
+              // Validate reference ID for digital payments
+              if (['UPI', 'CARD', 'BANK_TRANSFER'].includes(paymentMode) && !paymentReferenceId.trim()) {
+                throw new Error(`Reference ID is required for ${paymentMode} payments`);
+              }
+              
+              await recordPayment(billId, {
+                mode: paymentMode,
+                amount: parseFloat(paymentAmount),
+                referenceId: paymentReferenceId.trim() || null,
+                recordedBy: user.uid
+              });
+              
+              console.log('Payment recorded successfully');
+              
+              // Update bill object with payment info for preview
+              bill.id = billId;
+              bill.paymentStatus = parseFloat(paymentAmount) >= bill.totals.payableAmount ? 'PAID' : 'PARTIALLY_PAID';
+              bill.paidAmount = parseFloat(paymentAmount);
+              bill.dueAmount = bill.totals.payableAmount - parseFloat(paymentAmount);
+              bill.payments = [{
+                mode: paymentMode,
+                amount: parseFloat(paymentAmount),
+                referenceId: paymentReferenceId.trim() || null,
+                paidAt: new Date()
+              }];
+            } catch (paymentError) {
+              console.error('Failed to record payment:', paymentError);
+              // Don't fail the whole operation, just show warning
+              setError('Order created but payment recording failed: ' + paymentError.message);
+            }
+          }
+          
           // Reload today's bills to show the new bill
           try {
             const updatedBills = await getTodaysBills(user.uid);
@@ -378,6 +434,11 @@ const EmployeeDashboard = () => {
         deliveryDate: ''
       });
       setCart([]);
+      
+      // Reset payment fields (STEP 6)
+      setPaymentMode('CASH');
+      setPaymentAmount('');
+      setPaymentReferenceId('');
       
     } catch (err) {
       // DON'T clear form on error - let user see what they entered
@@ -883,6 +944,85 @@ const EmployeeDashboard = () => {
                   </div>
                 </div>
 
+                {/* Payment Recording Section (STEP 6) - Only for completed orders */}
+                {orderType !== 'prebooking' && cart.length > 0 && (() => {
+                  try {
+                    const orderCalc = calculateOrder({ items: cart, employeeDiscount: 0 });
+                    const totalAmount = Math.round(orderCalc.summary.grandTotal);
+                    
+                    return (
+                      <div style={{ marginTop: '20px', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '2px solid #0f172a' }}>
+                        <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
+                          💳 Payment Details
+                        </h4>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px', color: '#475569' }}>
+                              Payment Mode *
+                            </label>
+                            <select
+                              value={paymentMode}
+                              onChange={(e) => {
+                                setPaymentMode(e.target.value);
+                                setPaymentReferenceId(''); // Reset reference ID when mode changes
+                              }}
+                              style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                            >
+                              <option value="CASH">Cash</option>
+                              <option value="UPI">UPI</option>
+                              <option value="CARD">Card</option>
+                              <option value="BANK_TRANSFER">Bank Transfer</option>
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px', color: '#475569' }}>
+                              Amount (₹) *
+                            </label>
+                            <input
+                              type="text"
+                              value={paymentAmount}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
+                                  setPaymentAmount(value);
+                                }
+                              }}
+                              placeholder={totalAmount.toString()}
+                              style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                            />
+                            <small style={{ fontSize: '11px', color: '#64748b' }}>
+                              Total: ₹{totalAmount}
+                            </small>
+                          </div>
+                        </div>
+                        
+                        {['UPI', 'CARD', 'BANK_TRANSFER'].includes(paymentMode) && (
+                          <div style={{ marginBottom: '12px' }}>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px', color: '#475569' }}>
+                              Reference ID / Transaction ID *
+                            </label>
+                            <input
+                              type="text"
+                              value={paymentReferenceId}
+                              onChange={(e) => setPaymentReferenceId(e.target.value)}
+                              placeholder="Enter UPI/Card/Bank reference number"
+                              style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                            />
+                          </div>
+                        )}
+                        
+                        <div style={{ padding: '8px', background: '#d1fae5', borderRadius: '4px', fontSize: '11px', color: '#065f46' }}>
+                          ℹ️ Payment will be recorded when order is created
+                        </div>
+                      </div>
+                    );
+                  } catch (err) {
+                    return null;
+                  }
+                })()}
+
                 <button 
                   type="submit" 
                   className="emp-btn emp-btn-primary emp-btn-lg emp-btn-block"
@@ -1023,7 +1163,13 @@ const EmployeeDashboard = () => {
           onClose={() => {
             setShowBill(false);
             setCurrentBill(null);
-          }} 
+          }}
+          onPaymentRecorded={(updatedBill) => {
+            // Update current bill with payment info
+            setCurrentBill(updatedBill);
+            // Refresh today's bills list
+            loadData();
+          }}
         />
       )}
     </div>

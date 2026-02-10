@@ -6,12 +6,40 @@
  * NO calculations, NO mutations, NO business logic.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getGSTSummary } from '../../services/billingService';
+import { recordPayment, getPaymentSummary, PAYMENT_MODES, PAYMENT_STATUS } from '../../services/paymentService';
+import { useAuth } from '../../hooks/useAuth';
 import './BillPreview.css';
 
-const BillPreview = ({ bill, onClose }) => {
+const BillPreview = ({ bill, onClose, onPaymentRecorded }) => {
   const [isPrinting, setIsPrinting] = useState(false);
+  const [paymentSummary, setPaymentSummary] = useState(null);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    mode: PAYMENT_MODES.CASH,
+    amount: '',
+    referenceId: ''
+  });
+  const [isRecording, setIsRecording] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
+  const { user } = useAuth();
+
+  // Calculate payment summary on mount and when bill changes
+  useEffect(() => {
+    if (bill && bill.id) {
+      const summary = getPaymentSummary(bill);
+      setPaymentSummary(summary);
+      
+      // Auto-fill due amount in payment form
+      if (summary.dueAmount > 0) {
+        setPaymentForm(prev => ({
+          ...prev,
+          amount: summary.dueAmount.toFixed(2)
+        }));
+      }
+    }
+  }, [bill]);
 
   if (!bill) {
     return (
@@ -22,6 +50,7 @@ const BillPreview = ({ bill, onClose }) => {
   }
 
   const gstSummary = getGSTSummary(bill);
+  const isLocked = paymentSummary?.isLocked || false;
 
   const handlePrint = () => {
     setIsPrinting(true);
@@ -30,6 +59,75 @@ const BillPreview = ({ bill, onClose }) => {
       setIsPrinting(false);
     }, 100);
   };
+
+  const handlePaymentModeChange = (e) => {
+    const mode = e.target.value;
+    setPaymentForm(prev => ({
+      ...prev,
+      mode,
+      referenceId: '' // Reset reference ID when mode changes
+    }));
+  };
+
+  const handleAmountChange = (e) => {
+    const value = e.target.value;
+    // Allow only numbers and decimal point
+    if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
+      setPaymentForm(prev => ({ ...prev, amount: value }));
+    }
+  };
+
+  const handleRecordPayment = async () => {
+    try {
+      setIsRecording(true);
+      setPaymentError('');
+
+      // Validate amount
+      const amount = parseFloat(paymentForm.amount);
+      if (isNaN(amount) || amount <= 0) {
+        setPaymentError('Please enter a valid amount');
+        return;
+      }
+
+      // Record payment
+      const updatedBill = await recordPayment(bill.id, {
+        mode: paymentForm.mode,
+        amount: amount,
+        referenceId: paymentForm.referenceId.trim() || null,
+        recordedBy: user?.uid || null
+      });
+
+      // Update payment summary
+      const newSummary = getPaymentSummary(updatedBill);
+      setPaymentSummary(newSummary);
+
+      // Reset form
+      setPaymentForm({
+        mode: PAYMENT_MODES.CASH,
+        amount: newSummary.dueAmount > 0 ? newSummary.dueAmount.toFixed(2) : '',
+        referenceId: ''
+      });
+
+      // Hide form if fully paid
+      if (newSummary.paymentStatus === PAYMENT_STATUS.PAID) {
+        setShowPaymentForm(false);
+      }
+
+      // Notify parent component
+      if (onPaymentRecorded) {
+        onPaymentRecorded(updatedBill);
+      }
+
+      alert('Payment recorded successfully!');
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      setPaymentError(error.message || 'Failed to record payment');
+    } finally {
+      setIsRecording(false);
+    }
+  };
+
+  const needsReferenceId = [PAYMENT_MODES.UPI, PAYMENT_MODES.CARD, PAYMENT_MODES.BANK_TRANSFER].includes(paymentForm.mode);
 
   const formatDate = (dateValue) => {
     if (!dateValue) return 'N/A';
@@ -86,6 +184,143 @@ const BillPreview = ({ bill, onClose }) => {
           </button>
         )}
       </div>
+
+      {/* Payment Status & Recording (STEP 6) */}
+      {bill.id && paymentSummary && (
+        <div className="bill-payment-section no-print">
+          <div className="payment-status-card">
+            <h3>Payment Status</h3>
+            <div className="payment-status-grid">
+              <div className="payment-stat">
+                <span className="payment-label">Status:</span>
+                <span className={`payment-badge payment-badge-${paymentSummary.paymentStatus.toLowerCase()}`}>
+                  {paymentSummary.paymentStatus}
+                </span>
+              </div>
+              <div className="payment-stat">
+                <span className="payment-label">Payable Amount:</span>
+                <span className="payment-value">{formatCurrency(paymentSummary.payableAmount)}</span>
+              </div>
+              <div className="payment-stat">
+                <span className="payment-label">Paid Amount:</span>
+                <span className="payment-value payment-paid">{formatCurrency(paymentSummary.paidAmount)}</span>
+              </div>
+              <div className="payment-stat">
+                <span className="payment-label">Due Amount:</span>
+                <span className="payment-value payment-due">{formatCurrency(paymentSummary.dueAmount)}</span>
+              </div>
+            </div>
+
+            {/* Payment History */}
+            {paymentSummary.payments.length > 0 && (
+              <div className="payment-history">
+                <h4>Payment History ({paymentSummary.paymentsCount})</h4>
+                <div className="payment-history-list">
+                  {paymentSummary.payments.map((payment, index) => (
+                    <div key={index} className="payment-history-item">
+                      <span className="payment-mode-badge">{payment.mode}</span>
+                      <span className="payment-amount">{formatCurrency(payment.amount)}</span>
+                      {payment.referenceId && (
+                        <span className="payment-ref">Ref: {payment.referenceId}</span>
+                      )}
+                      <span className="payment-time">{formatDate(payment.paidAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Payment Recording Form */}
+            {!isLocked && paymentSummary.dueAmount > 0 && (
+              <div className="payment-recording">
+                {!showPaymentForm ? (
+                  <button 
+                    onClick={() => setShowPaymentForm(true)} 
+                    className="btn-add-payment"
+                  >
+                    💳 Record Payment
+                  </button>
+                ) : (
+                  <div className="payment-form">
+                    <h4>Record Payment</h4>
+                    
+                    {paymentError && (
+                      <div className="payment-error">{paymentError}</div>
+                    )}
+
+                    <div className="payment-form-grid">
+                      <div className="form-group">
+                        <label>Payment Mode</label>
+                        <select 
+                          value={paymentForm.mode} 
+                          onChange={handlePaymentModeChange}
+                          disabled={isRecording}
+                        >
+                          <option value={PAYMENT_MODES.CASH}>Cash</option>
+                          <option value={PAYMENT_MODES.UPI}>UPI</option>
+                          <option value={PAYMENT_MODES.CARD}>Card</option>
+                          <option value={PAYMENT_MODES.BANK_TRANSFER}>Bank Transfer</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Amount (₹)</label>
+                        <input 
+                          type="text" 
+                          value={paymentForm.amount}
+                          onChange={handleAmountChange}
+                          placeholder="0.00"
+                          disabled={isRecording}
+                        />
+                        <small>Due: ₹{paymentSummary.dueAmount.toFixed(2)}</small>
+                      </div>
+
+                      {needsReferenceId && (
+                        <div className="form-group form-group-full">
+                          <label>Reference ID / Transaction ID *</label>
+                          <input 
+                            type="text" 
+                            value={paymentForm.referenceId}
+                            onChange={(e) => setPaymentForm(prev => ({ ...prev, referenceId: e.target.value }))}
+                            placeholder="Enter UPI/Card/Bank reference number"
+                            disabled={isRecording}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="payment-form-actions">
+                      <button 
+                        onClick={handleRecordPayment}
+                        className="btn-record-payment"
+                        disabled={isRecording}
+                      >
+                        {isRecording ? 'Recording...' : '✓ Record Payment'}
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setShowPaymentForm(false);
+                          setPaymentError('');
+                        }}
+                        className="btn-cancel-payment"
+                        disabled={isRecording}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isLocked && (
+              <div className="payment-locked-notice">
+                🔒 Bill is fully paid and locked. No further changes allowed.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Print-ready invoice */}
       <div className="bill-invoice">

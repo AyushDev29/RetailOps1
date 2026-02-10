@@ -203,20 +203,51 @@ export const convertPreBookingToSale = async (preBookingId, exhibitionId = null)
     // Determine new type based on exhibition
     const newType = exhibitionId ? 'exhibition' : 'daily';
     
-    // Update order
+    // Import required services
+    const { generateBill } = await import('./billingService');
+    const { storeBill } = await import('./billStorageService');
+    const { deductStockBatch } = await import('./productService');
+    
+    // Generate bill for the order
+    const bill = await generateBill(orderData);
+    
+    // Store the bill
+    const storedBill = await storeBill(bill);
+    
+    // Deduct stock
+    if (orderData.items && Array.isArray(orderData.items)) {
+      // New schema - multiple items
+      const stockItems = orderData.items.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity
+      }));
+      await deductStockBatch(stockItems);
+    } else if (orderData.productId) {
+      // Old schema - single product
+      await deductStockBatch([{
+        productId: orderData.productId,
+        quantity: orderData.quantity
+      }]);
+    }
+    
+    // Update order to completed
     await updateDoc(orderRef, {
       type: newType,
-      status: 'prebooked', // Special status to indicate it was converted from pre-booking
+      status: 'completed',
       exhibitionId: exhibitionId || null,
-      convertedAt: serverTimestamp()
+      billId: storedBill.id,
+      convertedAt: serverTimestamp(),
+      completedAt: serverTimestamp()
     });
     
     return {
       id: preBookingId,
       ...orderData,
       type: newType,
-      status: 'prebooked',
-      exhibitionId
+      status: 'completed',
+      exhibitionId,
+      billId: storedBill.id,
+      bill: storedBill
     };
   } catch (error) {
     console.error('Error converting pre-booking:', error);

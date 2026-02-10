@@ -21,11 +21,20 @@ export const saveBill = async (bill) => {
       return value === undefined ? null : value;
     }));
     
+    // Initialize payment fields (STEP 6)
+    const payableAmount = cleanBill.totals?.payableAmount || 0;
+    
     await setDoc(billRef, {
       ...cleanBill,
       billDate: Timestamp.fromDate(new Date(cleanBill.billDate)),
       generatedAt: Timestamp.fromDate(new Date(cleanBill.generatedAt)),
-      createdAt: Timestamp.now()
+      createdAt: Timestamp.now(),
+      // Payment fields (STEP 6)
+      paymentStatus: 'UNPAID',
+      payments: [],
+      paidAmount: 0,
+      dueAmount: payableAmount,
+      locked: false
     });
     
     console.log('Bill saved successfully with ID:', billRef.id);
