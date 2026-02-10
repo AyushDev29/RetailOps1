@@ -99,7 +99,7 @@ service cloud.firestore {
                        // If on sale, sale price must be set
                        (!request.resource.data.isOnSale || request.resource.data.salePrice != null);
       
-      // OWNERS ONLY: Update products
+      // OWNERS ONLY: Update products (except stock deduction)
       allow update: if isOwner() && 
                        isActiveUser() &&
                        // CRITICAL: If sale price is being updated, it must be lower than base price
@@ -110,6 +110,18 @@ service cloud.firestore {
                        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isOnSale']) ||
                         !request.resource.data.isOnSale ||
                         request.resource.data.salePrice != null) &&
+                       // Validate updated timestamp
+                       request.resource.data.updatedAt is timestamp;
+      
+      // EMPLOYEES: Can ONLY update stockQty (for stock deduction during sales)
+      allow update: if isEmployee() && 
+                       isActiveUser() &&
+                       // CRITICAL: Only stockQty and updatedAt can be modified
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stockQty', 'updatedAt']) &&
+                       // Stock can only decrease (prevent employees from adding stock)
+                       request.resource.data.stockQty < resource.data.stockQty &&
+                       // Stock cannot go negative
+                       request.resource.data.stockQty >= 0 &&
                        // Validate updated timestamp
                        request.resource.data.updatedAt is timestamp;
       
