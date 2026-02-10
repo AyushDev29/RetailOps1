@@ -294,11 +294,15 @@ const EmployeeDashboard = () => {
             quantity: item.quantity
           }));
           
+          console.log('Attempting to deduct stock for items:', stockItems);
           const stockResults = await deductStockBatch(stockItems);
-          console.log('Stock deducted:', stockResults);
+          console.log('✅ Stock deducted successfully:', stockResults);
         } catch (stockError) {
+          console.error('❌ Stock deduction error:', stockError);
           throw new Error(`Stock deduction failed: ${stockError.message}`);
         }
+      } else {
+        console.log('⏭️ Skipping stock deduction for pre-booking');
       }
       
       const orderData = {

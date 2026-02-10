@@ -404,27 +404,35 @@
     padding: 0 !important;
   }
   
-  /* Hide non-bill elements completely */
+  /* Hide non-bill elements */
+  .bill-preview-controls,
+  .no-print,
+  .emp-dashboard > *:not(.bill-preview-container),
+  .emp-nav,
+  .emp-content > *:not(.bill-preview-container),
+  .emp-form,
+  .emp-section:not(.bill-preview-container),
+  .emp-card:not(.bill-preview-container),
+  .emp-alert,
+  nav:not(.bill-preview-container *),
+  header:not(.bill-preview-container *),
+  footer:not(.bill-preview-container *) {
+    display: none !important;
+  }
+  
+  /* Show only bill container */
   .bill-preview-container {
     position: static !important;
-    background: none !important;
+    background: white !important;
     padding: 0 !important;
     margin: 0 !important;
     display: block !important;
     overflow: visible !important;
     height: auto !important;
+    width: 100% !important;
   }
   
-  .bill-preview-controls,
-  .no-print {
-    display: none !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    visibility: hidden !important;
-  }
-  
-  /* Make invoice the only content */
+  /* Make invoice the only visible content */
   .bill-invoice {
     position: static !important;
     width: 100% !important;
@@ -435,6 +443,7 @@
     background: white !important;
     font-size: 9px !important;
     line-height: 1.2 !important;
+    display: block !important;
   }
   
   /* Ultra-compact header */
