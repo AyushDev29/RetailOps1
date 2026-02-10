@@ -9,6 +9,61 @@ This system provides separate dashboards for **Owners** and **Employees** with d
 - **Employees**: Create orders, manage exhibitions, view sales analytics (count-based)
 - **Owners**: Full business oversight, user management, product management, revenue analytics
 
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js (v16 or higher)
+- npm or yarn
+- Firebase account
+
+### Installation
+
+1. **Clone the repository**
+```bash
+git clone https://github.com/AyushDev29/RetailOps1.git
+cd clothing-brand-management
+```
+
+2. **Install dependencies**
+```bash
+npm install
+```
+
+3. **Set up environment variables**
+```bash
+# Copy the example env file
+cp .env.example .env
+
+# Edit .env and add your Firebase credentials
+# Get these from Firebase Console > Project Settings > General
+```
+
+4. **Configure Firebase**
+- Create a Firebase project at https://console.firebase.google.com
+- Enable Authentication (Email/Password)
+- Create a Firestore database
+- Copy your Firebase config to `.env`
+
+5. **Run the development server**
+```bash
+npm run dev
+```
+
+6. **Build for production**
+```bash
+npm run build
+```
+
+7. **Deploy to Firebase Hosting**
+```bash
+firebase deploy --only hosting
+```
+
+### ⚠️ Security Note
+- Never commit `.env` file to Git
+- The `.env` file contains sensitive Firebase credentials
+- Use `.env.example` as a template for other developers
+
 ## 🏗️ Architecture
 
 ### Clean Separation of Concerns
