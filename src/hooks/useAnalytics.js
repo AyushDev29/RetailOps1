@@ -15,7 +15,7 @@ export const useAnalytics = (filters) => {
     exhibitionSalesComparison: [],
     peakSalesTime: { hour: 0, count: 0 },
     peakSalesGender: { Male: 0, Female: 0, Other: 0 },
-    peakSalesAgeGroup: { '18-25': 0, '26-35': 0, '36-45': 0, '45+': 0 }
+    peakSalesAgeGroup: { '0-12': 0, '13-19': 0, '20-35': 0, '36-50': 0, '51+': 0 }
   });
 
   // Fetch data only once on mount
@@ -162,17 +162,13 @@ export const useAnalytics = (filters) => {
     const peakSalesGender = genderMap;
 
     // 5. Peak Sales Age Group
-    const ageGroupMap = { '18-25': 0, '26-35': 0, '36-45': 0, '45+': 0 };
+    const ageGroupMap = { '0-12': 0, '13-19': 0, '20-35': 0, '36-50': 0, '51+': 0 };
     filteredOrders.forEach(order => {
       const customer = customersMap[order.customerPhone];
       if (customer && customer.ageGroup) {
         const ag = customer.ageGroup;
-        if (ag === '0-12' || ag === '13-19' || ag === '20-35') {
-          ageGroupMap['18-25'] = (ageGroupMap['18-25'] || 0) + 1;
-        } else if (ag === '36-50') {
-          ageGroupMap['36-45'] = (ageGroupMap['36-45'] || 0) + 1;
-        } else if (ag === '51+') {
-          ageGroupMap['45+'] = (ageGroupMap['45+'] || 0) + 1;
+        if (ageGroupMap.hasOwnProperty(ag)) {
+          ageGroupMap[ag] = (ageGroupMap[ag] || 0) + 1;
         }
       }
     });

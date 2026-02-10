@@ -43,9 +43,14 @@ export const saveBill = async (bill) => {
  */
 export const getTodaysBills = async (employeeId) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayMillis = today.getTime();
+    // Get today's date in IST timezone
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+    const istNow = new Date(now.getTime() + istOffset);
+    
+    // Set to start of day in IST
+    const todayIST = new Date(istNow.getFullYear(), istNow.getMonth(), istNow.getDate());
+    const todayMillis = todayIST.getTime() - istOffset; // Convert back to UTC for comparison
     
     // Simple query with only employeeId filter (no composite index needed)
     const q = query(
@@ -62,7 +67,7 @@ export const getTodaysBills = async (employeeId) => {
         ...doc.data()
       }))
       .filter(bill => {
-        // Filter for today's bills
+        // Filter for today's bills (in IST)
         const billTime = bill.createdAt?.toMillis() || 0;
         return billTime >= todayMillis;
       })

@@ -16,6 +16,17 @@ export const getOrdersForRevenue = async () => {
     
     let orders = querySnapshot.docs.map(doc => {
       const data = doc.data();
+      
+      // Handle both old and new schema
+      let revenue = 0;
+      if (data.totals && data.totals.payableAmount) {
+        // New schema: use totals.payableAmount
+        revenue = data.totals.payableAmount;
+      } else if (data.price && data.quantity) {
+        // Old schema: calculate from price * quantity
+        revenue = data.price * data.quantity;
+      }
+      
       return {
         id: doc.id,
         type: data.type,
@@ -23,6 +34,9 @@ export const getOrdersForRevenue = async () => {
         price: data.price,
         quantity: data.quantity,
         productId: data.productId,
+        items: data.items, // New schema
+        totals: data.totals, // New schema
+        revenue: revenue, // Calculated revenue
         createdAt: data.createdAt,
         exhibitionId: data.exhibitionId
       };
@@ -79,16 +93,16 @@ export const getProductsMap = async () => {
  */
 export const getRevenueSummary = (orders) => {
   const overallRevenue = orders.reduce((sum, order) => {
-    return sum + (order.price * order.quantity);
+    return sum + (order.revenue || 0);
   }, 0);
 
   const dailySalesRevenue = orders
     .filter(order => order.type === 'daily')
-    .reduce((sum, order) => sum + (order.price * order.quantity), 0);
+    .reduce((sum, order) => sum + (order.revenue || 0), 0);
 
   const exhibitionSalesRevenue = orders
     .filter(order => order.type === 'exhibition')
-    .reduce((sum, order) => sum + (order.price * order.quantity), 0);
+    .reduce((sum, order) => sum + (order.revenue || 0), 0);
 
   return {
     overallRevenue,
@@ -122,11 +136,11 @@ export const getMonthlyRevenueComparison = (orders) => {
   });
 
   const currentMonthRevenue = currentMonthOrders.reduce((sum, order) => {
-    return sum + (order.price * order.quantity);
+    return sum + (order.revenue || 0);
   }, 0);
 
   const previousMonthRevenue = previousMonthOrders.reduce((sum, order) => {
-    return sum + (order.price * order.quantity);
+    return sum + (order.revenue || 0);
   }, 0);
 
   return {
@@ -148,7 +162,7 @@ export const getRevenueByCategory = (orders, productsMap) => {
     const product = productsMap[order.productId];
     if (product) {
       const category = product.category;
-      const revenue = order.price * order.quantity;
+      const revenue = order.revenue || 0;
       if (!categoryRevenue[category]) {
         categoryRevenue[category] = 0;
       }
@@ -171,7 +185,7 @@ export const getTopSellingProduct = (orders, productsMap) => {
   const productRevenue = {};
   
   orders.forEach(order => {
-    const revenue = order.price * order.quantity;
+    const revenue = order.revenue || 0;
     if (!productRevenue[order.productId]) {
       productRevenue[order.productId] = 0;
     }
@@ -222,7 +236,7 @@ export const getRevenueTrend = (orders) => {
         const orderDate = order.createdAt.toDate();
         return orderDate >= date && orderDate < nextDate;
       })
-      .reduce((sum, order) => sum + (order.price * order.quantity), 0);
+      .reduce((sum, order) => sum + (order.revenue || 0), 0);
 
     return {
       date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -289,7 +303,7 @@ export const getProductPerformanceOverTime = (orders, productsMap) => {
   // Calculate total revenue per product
   const productRevenue = {};
   orders.forEach(order => {
-    const revenue = order.price * order.quantity;
+    const revenue = order.revenue || 0;
     if (!productRevenue[order.productId]) {
       productRevenue[order.productId] = 0;
     }
@@ -328,7 +342,7 @@ export const getProductPerformanceOverTime = (orders, productsMap) => {
           const orderDate = order.createdAt.toDate();
           return orderDate >= date && orderDate < nextDate;
         })
-        .reduce((sum, order) => sum + (order.price * order.quantity), 0);
+        .reduce((sum, order) => sum + (order.revenue || 0), 0);
 
       return dayRevenue;
     });

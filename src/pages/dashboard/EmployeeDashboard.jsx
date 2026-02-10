@@ -520,7 +520,15 @@ const EmployeeDashboard = () => {
               {activeExhibition ? (
                 <>
                   <h3>Exhibition Active</h3>
-                  <p>{activeExhibition.location} • Started {new Date(activeExhibition.startTime).toLocaleString()}</p>
+                  <p>
+                    {activeExhibition.location} • Started {
+                      new Date(activeExhibition.startTime).toLocaleString('en-IN', {
+                        timeZone: 'Asia/Kolkata',
+                        dateStyle: 'short',
+                        timeStyle: 'short'
+                      })
+                    }
+                  </p>
                 </>
               ) : (
                 <>
@@ -977,10 +985,16 @@ const EmployeeDashboard = () => {
                             // Check if date is valid
                             if (isNaN(date.getTime())) return 'Invalid Date';
                             
-                            return date.toLocaleTimeString('en-IN', { 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
-                            });
+                            // Convert to IST manually (UTC + 5:30)
+                            const istOffset = 5.5 * 60 * 60 * 1000;
+                            const istDate = new Date(date.getTime() + istOffset);
+                            
+                            let hours = istDate.getUTCHours();
+                            const minutes = istDate.getUTCMinutes().toString().padStart(2, '0');
+                            const ampm = hours >= 12 ? 'pm' : 'am';
+                            hours = hours % 12 || 12;
+                            
+                            return `${hours}:${minutes} ${ampm}`;
                           })()}
                         </span>
                       </div>

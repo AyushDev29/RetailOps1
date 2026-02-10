@@ -414,6 +414,12 @@
   .emp-section:not(.bill-preview-container),
   .emp-card:not(.bill-preview-container),
   .emp-alert,
+  .owner-dashboard > *:not(.bill-preview-container),
+  .owner-header,
+  .owner-tabs,
+  .owner-content > *:not(.bill-preview-container),
+  .owner-section:not(.bill-preview-container),
+  .owner-card:not(.bill-preview-container),
   nav:not(.bill-preview-container *),
   header:not(.bill-preview-container *),
   footer:not(.bill-preview-container *) {

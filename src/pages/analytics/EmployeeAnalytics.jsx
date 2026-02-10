@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useAnalytics } from '../../hooks/useAnalytics';
 import { getExhibitionsForFilter } from '../../services/analyticsService';
-import ChartWrapper from '../../components/common/ChartWrapper';
-import StatsCard from '../../components/common/StatsCard';
-import BarChart from '../../components/charts/BarChart';
-import PieChart from '../../components/charts/PieChart';
+import {
+  BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  Legend, ResponsiveContainer
+} from 'recharts';
 import '../../styles/EmployeeAnalytics.css';
 
 const EmployeeAnalytics = () => {
@@ -27,6 +28,47 @@ const EmployeeAnalytics = () => {
   
   // Fetch analytics using custom hook
   const { analytics, loading, error } = useAnalytics(filters);
+  
+  // Chart colors
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+  
+  // Custom tooltip
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      
+      // For pie charts
+      if (data.payload && data.name) {
+        const percentage = data.percent ? (data.percent * 100).toFixed(1) : '';
+        return (
+          <div className="custom-tooltip">
+            <p className="tooltip-label">{data.name}</p>
+            <p style={{ color: '#fff' }}>
+              <strong>Sales:</strong> {data.value}
+            </p>
+            {percentage && (
+              <p style={{ color: '#fff' }}>
+                <strong>Percentage:</strong> {percentage}%
+              </p>
+            )}
+          </div>
+        );
+      }
+      
+      // For bar charts
+      return (
+        <div className="custom-tooltip">
+          <p className="tooltip-label">{label}</p>
+          {payload.map((entry, index) => (
+            <p key={index} style={{ color: '#fff' }}>
+              <strong>{entry.name}:</strong> {entry.value}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
   
   // Load exhibitions for filter
   useEffect(() => {
@@ -212,10 +254,11 @@ const EmployeeAnalytics = () => {
               className="filter-select"
             >
               <option value="">All Ages</option>
-              <option value="18-25">18-25</option>
-              <option value="26-35">26-35</option>
-              <option value="36-45">36-45</option>
-              <option value="45+">45+</option>
+              <option value="0-12">0-12 (Kids)</option>
+              <option value="13-19">13-19 (Teens)</option>
+              <option value="20-35">20-35 (Young Adults)</option>
+              <option value="36-50">36-50 (Adults)</option>
+              <option value="51+">51+ (Seniors)</option>
             </select>
           </div>
           
@@ -246,115 +289,285 @@ const EmployeeAnalytics = () => {
       
       {/* Stats Cards */}
       <div className="stats-grid">
-        <StatsCard
-          title="Peak Sales Time (IST)"
-          value={`${formatHour(analytics.peakSalesTime.hour)} (${analytics.peakSalesTime.count} sales)`}
-          icon={
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="stat-card">
+          <div className="stat-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10"/>
               <polyline points="12 6 12 12 16 14"/>
             </svg>
-          }
-        />
-        <StatsCard
-          title="Peak Age Group"
-          value={`${getPeakAgeGroup().group} (${getPeakAgeGroup().count} sales)`}
-          icon={
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          </div>
+          <div className="stat-content">
+            <h3>Peak Sales Time</h3>
+            <p className="stat-value">{formatHour(analytics.peakSalesTime.hour)}</p>
+            <span className="stat-label">{analytics.peakSalesTime.count} sales</span>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
               <circle cx="9" cy="7" r="4"/>
               <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
               <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
-          }
-        />
-        <StatsCard
-          title="Peak Gender"
-          value={`${getPeakGender().gender} (${getPeakGender().count} sales)`}
-          icon={
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          </div>
+          <div className="stat-content">
+            <h3>Peak Age Group</h3>
+            <p className="stat-value">{getPeakAgeGroup().group}</p>
+            <span className="stat-label">{getPeakAgeGroup().count} sales</span>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="8" r="7"/>
               <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
             </svg>
-          }
-        />
-        <StatsCard
-          title="Total Sales"
-          value={`${analytics.dailySalesComparison.current} sales`}
-          icon={
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          </div>
+          <div className="stat-content">
+            <h3>Peak Gender</h3>
+            <p className="stat-value">{getPeakGender().gender}</p>
+            <span className="stat-label">{getPeakGender().count} sales</span>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="20" x2="12" y2="10"/>
               <line x1="18" y1="20" x2="18" y2="4"/>
               <line x1="6" y1="20" x2="6" y2="16"/>
             </svg>
-          }
-        />
+          </div>
+          <div className="stat-content">
+            <h3>Total Sales</h3>
+            <p className="stat-value">{analytics.dailySalesComparison.current}</p>
+            <span className="stat-label">Current period</span>
+          </div>
+        </div>
       </div>
       
       {/* Charts Section */}
       <div className="charts-grid">
         {/* Sales Comparison Chart */}
-        <ChartWrapper title={getComparisonLabel()}>
-          {analytics.dailySalesComparison.current === 0 && analytics.dailySalesComparison.previous === 0 ? (
-            <div className="chart-empty">No data for selected period</div>
-          ) : (
-            <BarChart
-              data={{
-                labels: ['Previous Period', 'Current Period'],
-                values: [
-                  analytics.dailySalesComparison.previous,
-                  analytics.dailySalesComparison.current
-                ]
-              }}
-            />
-          )}
-        </ChartWrapper>
+        <div className="chart-card">
+          <div className="chart-header">
+            <div>
+              <h3>{getComparisonLabel()}</h3>
+              <p className="chart-subtitle">Period comparison</p>
+            </div>
+          </div>
+          <div className="chart-body">
+            {analytics.dailySalesComparison.current === 0 && analytics.dailySalesComparison.previous === 0 ? (
+              <div className="chart-empty">No data for selected period</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart 
+                  data={[
+                    { period: 'Previous', sales: analytics.dailySalesComparison.previous },
+                    { period: 'Current', sales: analytics.dailySalesComparison.current }
+                  ]}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis 
+                    dataKey="period" 
+                    stroke="#9ca3af" 
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <YAxis 
+                    stroke="#9ca3af" 
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar 
+                    dataKey="sales" 
+                    name="Sales"
+                    fill="#3b82f6" 
+                    radius={[4, 4, 0, 0]} 
+                    animationDuration={1500}
+                    barSize={80}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
         
         {/* Gender Distribution Chart */}
-        <ChartWrapper title="Sales by Gender">
-          {Object.values(analytics.peakSalesGender).every(v => v === 0) ? (
-            <div className="chart-empty">No data for selected period</div>
-          ) : (
-            <PieChart
-              data={{
-                labels: Object.keys(analytics.peakSalesGender),
-                values: Object.values(analytics.peakSalesGender)
-              }}
-            />
-          )}
-        </ChartWrapper>
+        <div className="chart-card">
+          <div className="chart-header">
+            <div>
+              <h3>Sales by Gender</h3>
+              <p className="chart-subtitle">Customer demographics</p>
+            </div>
+          </div>
+          <div className="chart-body chart-center">
+            {Object.values(analytics.peakSalesGender).every(v => v === 0) ? (
+              <div className="chart-empty">No data for selected period</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={Object.entries(analytics.peakSalesGender).map(([name, value]) => ({ name, value }))}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={50}
+                    outerRadius={90}
+                    paddingAngle={3}
+                    dataKey="value"
+                    nameKey="name"
+                    animationDuration={1500}
+                    label={({ cx, cy, midAngle, innerRadius, outerRadius, name, percent }) => {
+                      const RADIAN = Math.PI / 180;
+                      const radius = outerRadius + 20;
+                      const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                      const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                      
+                      return (
+                        <text 
+                          x={x} 
+                          y={y} 
+                          fill="#111827"
+                          textAnchor={x > cx ? 'start' : 'end'} 
+                          dominantBaseline="central"
+                          style={{ 
+                            fontSize: '12px', 
+                            fontWeight: '600',
+                            textShadow: '0 0 3px white, 0 0 3px white'
+                          }}
+                        >
+                          {`${name} ${(percent * 100).toFixed(0)}%`}
+                        </text>
+                      );
+                    }}
+                    labelLine={{ stroke: '#6b7280', strokeWidth: 1.5 }}
+                  >
+                    {Object.keys(analytics.peakSalesGender).map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={COLORS[index % COLORS.length]}
+                        stroke="#fff"
+                        strokeWidth={2}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
         
         {/* Age Group Distribution Chart */}
-        <ChartWrapper title="Sales by Age Group">
-          {Object.values(analytics.peakSalesAgeGroup).every(v => v === 0) ? (
-            <div className="chart-empty">No data for selected period</div>
-          ) : (
-            <BarChart
-              data={{
-                labels: Object.keys(analytics.peakSalesAgeGroup),
-                values: Object.values(analytics.peakSalesAgeGroup)
-              }}
-            />
-          )}
-        </ChartWrapper>
+        <div className="chart-card chart-wide">
+          <div className="chart-header">
+            <div>
+              <h3>Sales by Age Group</h3>
+              <p className="chart-subtitle">Age demographics</p>
+            </div>
+          </div>
+          <div className="chart-body">
+            {Object.values(analytics.peakSalesAgeGroup).every(v => v === 0) ? (
+              <div className="chart-empty">No data for selected period</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart 
+                  data={Object.entries(analytics.peakSalesAgeGroup).map(([age, sales]) => ({ age, sales }))}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis 
+                    dataKey="age" 
+                    stroke="#9ca3af" 
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <YAxis 
+                    stroke="#9ca3af" 
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar 
+                    dataKey="sales" 
+                    name="Sales"
+                    fill="#10b981" 
+                    radius={[4, 4, 0, 0]} 
+                    animationDuration={1500}
+                    barSize={50}
+                  >
+                    {Object.keys(analytics.peakSalesAgeGroup).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
         
         {/* Exhibition Sales Chart */}
-        {analytics.exhibitionSalesComparison.length > 0 ? (
-          <ChartWrapper title="Sales by Exhibition">
-            <BarChart
-              data={{
-                labels: analytics.exhibitionSalesComparison.map(ex => 
-                  exhibitionMap[ex.exhibitionId] || 'Unknown Exhibition'
-                ),
-                values: analytics.exhibitionSalesComparison.map(ex => ex.count)
-              }}
-            />
-          </ChartWrapper>
-        ) : (
-          <ChartWrapper title="Sales by Exhibition">
-            <div className="chart-empty">No exhibition sales for selected period</div>
-          </ChartWrapper>
-        )}
+        <div className="chart-card chart-wide">
+          <div className="chart-header">
+            <div>
+              <h3>Sales by Exhibition</h3>
+              <p className="chart-subtitle">Exhibition performance</p>
+            </div>
+          </div>
+          <div className="chart-body">
+            {analytics.exhibitionSalesComparison.length === 0 ? (
+              <div className="chart-empty">No exhibition sales for selected period</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart 
+                  data={analytics.exhibitionSalesComparison.map(ex => ({
+                    exhibition: exhibitionMap[ex.exhibitionId] || 'Unknown',
+                    sales: ex.count
+                  }))}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis 
+                    dataKey="exhibition" 
+                    stroke="#9ca3af" 
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <YAxis 
+                    stroke="#9ca3af" 
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar 
+                    dataKey="sales" 
+                    name="Sales"
+                    fill="#f59e0b" 
+                    radius={[4, 4, 0, 0]} 
+                    animationDuration={1500}
+                    barSize={60}
+                  >
+                    {analytics.exhibitionSalesComparison.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -4,7 +4,8 @@ import Register from '../pages/auth/Register';
 import EmployeeDashboard from '../pages/dashboard/EmployeeDashboard';
 import EmployeeAnalytics from '../pages/analytics/EmployeeAnalytics';
 import OwnerDashboard from '../pages/owner/OwnerDashboard';
-import OwnerAnalytics from '../pages/owner/OwnerAnalytics';
+import OwnerAnalyticsPro from '../pages/owner/OwnerAnalyticsPro';
+import UserManagement from '../pages/owner/UserManagement';
 import BillPreviewTest from '../pages/test/BillPreviewTest';
 import ProtectedRoute from '../components/layout/ProtectedRoute';
 
@@ -43,10 +44,26 @@ function AppRoutes() {
         } 
       />
       <Route 
+        path="/owner/dashboard" 
+        element={
+          <ProtectedRoute requiredRole="owner">
+            <OwnerDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
         path="/owner/analytics" 
         element={
           <ProtectedRoute requiredRole="owner">
-            <OwnerAnalytics />
+            <OwnerAnalyticsPro />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/owner/users" 
+        element={
+          <ProtectedRoute requiredRole="owner">
+            <UserManagement />
           </ProtectedRoute>
         } 
       />

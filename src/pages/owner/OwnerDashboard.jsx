@@ -18,7 +18,10 @@ const OwnerDashboard = () => {
   const navigate = useNavigate();
   
   // State management
-  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'products' | 'exhibitions' | 'orders'
+  const [activeTab, setActiveTab] = useState(() => {
+    // Restore active tab from localStorage or default to 'products'
+    return localStorage.getItem('ownerActiveTab') || 'products';
+  }); // 'products' | 'exhibitions' | 'orders'
   const [users, setUsers] = useState([]);
   const [products, setProducts] = useState([]);
   const [exhibitions, setExhibitions] = useState([]);
@@ -58,6 +61,8 @@ const OwnerDashboard = () => {
   // Load data based on active tab
   useEffect(() => {
     loadData();
+    // Save active tab to localStorage
+    localStorage.setItem('ownerActiveTab', activeTab);
   }, [activeTab]);
 
   const loadData = async () => {
@@ -65,16 +70,7 @@ const OwnerDashboard = () => {
       setLoading(true);
       setError('');
       
-      if (activeTab === 'users') {
-        const usersData = await getAllUsers();
-        setUsers(usersData);
-        // Build user map for lookups
-        const map = {};
-        usersData.forEach(u => {
-          map[u.id] = u.name || u.email;
-        });
-        setUserMap(map);
-      } else if (activeTab === 'products') {
+      if (activeTab === 'products') {
         const productsData = await getAllProducts();
         setProducts(productsData);
         // Build product map for lookups
@@ -567,6 +563,9 @@ const OwnerDashboard = () => {
             <button onClick={() => navigate('/owner/analytics')} className="btn btn-primary">
               View Analytics
             </button>
+            <button onClick={() => navigate('/owner/users')} className="btn btn-primary">
+              User Management
+            </button>
             <button onClick={handleLogout} className="btn btn-logout">
               Logout
             </button>
@@ -580,12 +579,6 @@ const OwnerDashboard = () => {
 
       {/* Tab Navigation */}
       <div className="tab-navigation">
-        <button
-          className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
-          onClick={() => setActiveTab('users')}
-        >
-          User Management
-        </button>
         <button
           className={`tab-btn ${activeTab === 'products' ? 'active' : ''}`}
           onClick={() => setActiveTab('products')}
@@ -605,61 +598,6 @@ const OwnerDashboard = () => {
           Orders
         </button>
       </div>
-
-      {/* User Management Tab */}
-      {activeTab === 'users' && (
-        <div className="dashboard-section">
-          <h2>User Management</h2>
-          <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Created At</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map(u => (
-                  <tr key={u.id}>
-                    <td>{u.name}</td>
-                    <td>{u.email}</td>
-                    <td>
-                      <select
-                        value={u.role}
-                        onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                        disabled={u.id === user.uid}
-                        className="role-select"
-                      >
-                        <option value="employee">Employee</option>
-                        <option value="owner">Owner</option>
-                      </select>
-                    </td>
-                    <td>
-                      <span className={`status-badge ${u.isActive ? 'active' : 'inactive'}`}>
-                        {u.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}</td>
-                    <td>
-                      <button
-                        onClick={() => handleToggleActive(u.id, u.isActive)}
-                        disabled={u.id === user.uid && u.isActive}
-                        className={`btn btn-sm ${u.isActive ? 'btn-danger' : 'btn-success'}`}
-                      >
-                        {u.isActive ? 'Disable' : 'Enable'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* Product Management Tab */}
       {activeTab === 'products' && (
@@ -935,7 +873,14 @@ const OwnerDashboard = () => {
                     <tr key={ex.id}>
                       <td>{ex.location}</td>
                       <td>{ex.startTime}</td>
-                      <td>{ex.endTime ? new Date(ex.endTime.seconds * 1000).toLocaleString() : 'Ongoing'}</td>
+                      <td>
+                        {ex.endTime ? 
+                          new Date(ex.endTime.seconds * 1000).toLocaleString('en-IN', {
+                            timeZone: 'Asia/Kolkata',
+                            dateStyle: 'short',
+                            timeStyle: 'short'
+                          }) : 'Ongoing'}
+                      </td>
                       <td>{userMap[ex.createdBy] || ex.createdBy}</td>
                       <td>
                         <span className={`status-badge ${ex.active ? 'active' : 'inactive'}`}>
@@ -1038,7 +983,14 @@ const OwnerDashboard = () => {
                           </span>
                         </td>
                         <td>{userMap[order.createdBy] || order.createdBy}</td>
-                        <td>{order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString() : 'N/A'}</td>
+                        <td>
+                          {order.createdAt?.toDate ? 
+                            order.createdAt.toDate().toLocaleString('en-IN', {
+                              timeZone: 'Asia/Kolkata',
+                              dateStyle: 'short',
+                              timeStyle: 'short'
+                            }) : 'N/A'}
+                        </td>
                         <td>
                           {order.status === 'completed' && (
                             <button

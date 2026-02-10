@@ -49,11 +49,21 @@ const BillPreview = ({ bill, onClose }) => {
       return 'Invalid Date';
     }
     
-    return date.toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    });
+    // Convert to IST manually (UTC + 5:30)
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(date.getTime() + istOffset);
+    
+    // Format: "11 Feb 2026, 11:06 am"
+    const day = istDate.getUTCDate();
+    const month = istDate.toLocaleString('en-IN', { month: 'short', timeZone: 'UTC' });
+    const year = istDate.getUTCFullYear();
+    
+    let hours = istDate.getUTCHours();
+    const minutes = istDate.getUTCMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'pm' : 'am';
+    hours = hours % 12 || 12;
+    
+    return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
   };
 
   const formatCurrency = (amount) => {

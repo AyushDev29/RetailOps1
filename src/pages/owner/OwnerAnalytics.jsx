@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useOwnerAnalytics } from '../../hooks/useOwnerAnalytics';
@@ -11,7 +12,21 @@ import '../../styles/OwnerAnalytics.css';
 const OwnerAnalytics = () => {
   const { user, userProfile, logout } = useAuth();
   const navigate = useNavigate();
-  const { analytics, loading, error } = useOwnerAnalytics();
+  
+  // Filters state
+  const [filters, setFilters] = useState({
+    dateRange: 'all', // 'all', 'today', 'week', 'month', 'custom'
+    orderType: 'all', // 'all', 'daily', 'exhibition'
+    startDate: '',
+    endDate: ''
+  });
+  
+  const { analytics, loading, error } = useOwnerAnalytics(filters);
+
+  // Handle filter changes
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
 
   // Handle logout
   const handleLogout = async () => {
@@ -58,6 +73,66 @@ const OwnerAnalytics = () => {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      {/* Filters Section */}
+      <div className="filters-section">
+        <h3>Filters</h3>
+        <div className="filters-grid">
+          {/* Date Range Filter */}
+          <div className="filter-group">
+            <label>Date Range</label>
+            <select
+              value={filters.dateRange}
+              onChange={(e) => handleFilterChange('dateRange', e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="week">This Week</option>
+              <option value="month">This Month</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+
+          {/* Custom Date Range */}
+          {filters.dateRange === 'custom' && (
+            <>
+              <div className="filter-group">
+                <label>Start Date</label>
+                <input
+                  type="date"
+                  value={filters.startDate}
+                  onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                  className="filter-input"
+                />
+              </div>
+              <div className="filter-group">
+                <label>End Date</label>
+                <input
+                  type="date"
+                  value={filters.endDate}
+                  onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                  className="filter-input"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Order Type Filter */}
+          <div className="filter-group">
+            <label>Order Type</label>
+            <select
+              value={filters.orderType}
+              onChange={(e) => handleFilterChange('orderType', e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Types</option>
+              <option value="daily">Store Sales</option>
+              <option value="exhibition">Exhibition Sales</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
       {/* Empty state for no revenue */}
       {analytics.overallRevenue === 0 && (
