@@ -432,3 +432,88 @@ export const updateProductStock = async (productId, newStockQty) => {
     throw error;
   }
 };
+
+/**
+ * Deduct stock quantity when product is sold
+ * @param {string} productId - Product document ID
+ * @param {number} quantity - Quantity to deduct
+ * @returns {Promise<number>} New stock quantity
+ */
+export const deductStock = async (productId, quantity) => {
+  try {
+    if (typeof quantity !== 'number' || quantity <= 0) {
+      throw new Error('Quantity must be a positive number');
+    }
+    
+    // Get current stock
+    const productDoc = await getDoc(doc(db, 'products', productId));
+    
+    if (!productDoc.exists()) {
+      throw new Error('Product not found');
+    }
+    
+    const currentStock = productDoc.data().stockQty || 0;
+    const newStock = currentStock - quantity;
+    
+    if (newStock < 0) {
+      throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${quantity}`);
+    }
+    
+    // Update stock
+    const productRef = doc(db, 'products', productId);
+    await setDoc(productRef, {
+      stockQty: newStock,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    
+    return newStock;
+  } catch (error) {
+    console.error('Error deducting stock:', error);
+    throw error;
+  }
+};
+
+/**
+ * Deduct stock for multiple items (for multi-product orders)
+ * @param {Array} items - Array of { productId, quantity }
+ * @returns {Promise<Array>} Array of { productId, oldStock, newStock }
+ */
+export const deductStockBatch = async (items) => {
+  try {
+    const results = [];
+    
+    for (const item of items) {
+      const productDoc = await getDoc(doc(db, 'products', item.productId));
+      
+      if (!productDoc.exists()) {
+        throw new Error(`Product not found: ${item.productId}`);
+      }
+      
+      const currentStock = productDoc.data().stockQty || 0;
+      const newStock = currentStock - item.quantity;
+      
+      if (newStock < 0) {
+        throw new Error(`Insufficient stock for ${productDoc.data().name}. Available: ${currentStock}, Requested: ${item.quantity}`);
+      }
+      
+      // Update stock
+      const productRef = doc(db, 'products', item.productId);
+      await setDoc(productRef, {
+        stockQty: newStock,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      results.push({
+        productId: item.productId,
+        productName: productDoc.data().name,
+        oldStock: currentStock,
+        newStock: newStock
+      });
+    }
+    
+    return results;
+  } catch (error) {
+    console.error('Error deducting stock batch:', error);
+    throw error;
+  }
+};

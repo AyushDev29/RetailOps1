@@ -15,37 +15,47 @@ import { db } from './firebase';
 /**
  * Create a new order
  * @param {Object} orderData - Order information
- * @returns {string} Order document ID
+ * @returns {Object} Created order with ID
  */
 export const createOrder = async (orderData) => {
   try {
     const {
       type, // 'daily' | 'prebooking' | 'exhibition'
       customerPhone,
-      productId,
-      price,
-      quantity = 1,
+      items, // Array of { productId, productName, sku, quantity, unitPrice, lineTotal }
+      totals, // { subtotal, totalCGST, totalSGST, totalTax, grandTotal, payableAmount }
       status,
       exhibitionId = null,
       createdBy, // employee UID
-      deliveryDate = null // for prebooking
+      deliveryDate = null, // for prebooking
+      billId = null // Link to bill
     } = orderData;
     
+    // Validate items array
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      throw new Error('Order must have at least one item');
+    }
+    
     const orderRef = doc(collection(db, 'orders'));
-    await setDoc(orderRef, {
+    const orderDoc = {
       type,
       customerPhone,
-      productId,
-      price,
-      quantity,
+      items,
+      totals,
       status,
       exhibitionId,
       createdBy,
       deliveryDate,
+      billId,
       createdAt: serverTimestamp()
-    });
+    };
     
-    return orderRef.id;
+    await setDoc(orderRef, orderDoc);
+    
+    return {
+      id: orderRef.id,
+      ...orderDoc
+    };
   } catch (error) {
     console.error('Error creating order:', error);
     throw error;

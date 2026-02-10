@@ -77,11 +77,6 @@ const BillPreview = ({ bill, onClose }) => {
         )}
       </div>
 
-      {/* Debug info */}
-      <div className="no-print" style={{ background: '#f0f0f0', padding: '10px', marginBottom: '10px', fontSize: '11px' }}>
-        <strong>Debug:</strong> Bill Number: {bill.billNumber}, Items: {bill.lineItems?.length || 0}
-      </div>
-
       {/* Print-ready invoice */}
       <div className="bill-invoice">
         {/* Header */}

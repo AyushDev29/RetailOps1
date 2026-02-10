@@ -8,6 +8,7 @@ import { getCustomerByPhone, createOrUpdateCustomer } from '../../services/custo
 import { calculateOrder } from '../../services/orderCalculationService';
 import { generateBill } from '../../services/billingService';
 import { saveBill, getTodaysBills } from '../../services/billStorageService';
+import { deductStockBatch } from '../../services/productService';
 import BillPreview from '../../components/billing/BillPreview';
 import '../../styles/EmployeeDashboard.css';
 
@@ -285,28 +286,54 @@ const EmployeeDashboard = () => {
       }
       
       // Only create orders if bill generation succeeded (or if it's a pre-booking)
-      const createdOrders = [];
-      for (const cartItem of cart) {
-        const orderData = {
-          type: finalOrderType,
-          customerPhone: formData.customerPhone,
-          productId: cartItem.productId,
-          price: cartItem.unitSalePrice || cartItem.unitBasePrice,
-          quantity: cartItem.quantity,
-          status: orderType === 'prebooking' ? 'pending' : 'completed',
-          exhibitionId,
-          createdBy: user.uid,
-          deliveryDate: orderType === 'prebooking' ? formData.deliveryDate : null
-        };
-        
-        const createdOrder = await createOrder(orderData);
-        createdOrders.push(createdOrder);
+      // Deduct stock for completed orders (not pre-bookings)
+      if (orderType !== 'prebooking') {
+        try {
+          const stockItems = cart.map(item => ({
+            productId: item.productId,
+            quantity: item.quantity
+          }));
+          
+          const stockResults = await deductStockBatch(stockItems);
+          console.log('Stock deducted:', stockResults);
+        } catch (stockError) {
+          throw new Error(`Stock deduction failed: ${stockError.message}`);
+        }
       }
+      
+      const orderData = {
+        type: finalOrderType,
+        customerPhone: formData.customerPhone,
+        items: cart.map(cartItem => ({
+          productId: cartItem.productId,
+          productName: cartItem.name,
+          sku: cartItem.sku,
+          category: cartItem.category,
+          quantity: cartItem.quantity,
+          unitPrice: cartItem.unitSalePrice || cartItem.unitBasePrice,
+          lineTotal: (cartItem.unitSalePrice || cartItem.unitBasePrice) * cartItem.quantity
+        })),
+        totals: bill ? {
+          subtotal: bill.totals.subtotal,
+          totalCGST: bill.totals.totalCGST,
+          totalSGST: bill.totals.totalSGST,
+          totalTax: bill.totals.totalTax,
+          grandTotal: bill.totals.grandTotal,
+          payableAmount: bill.totals.payableAmount
+        } : null,
+        status: orderType === 'prebooking' ? 'pending' : 'completed',
+        exhibitionId,
+        createdBy: user.uid,
+        deliveryDate: orderType === 'prebooking' ? formData.deliveryDate : null,
+        billId: bill ? bill.billNumber : null
+      };
+      
+      const createdOrder = await createOrder(orderData);
       
       // Show bill preview and save if generated
       if (bill) {
         // Update bill with actual order ID
-        bill.orderId = createdOrders[0]?.id || bill.orderId;
+        bill.orderId = createdOrder?.id || bill.orderId;
         
         // Save bill to Firestore
         try {

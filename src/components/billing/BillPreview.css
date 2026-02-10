@@ -394,27 +394,238 @@
    ============================================================================ */
 
 @media print {
-  /* Hide screen-only elements */
-  .no-print,
-  .bill-preview-controls {
-    display: none !important;
+  /* Reset everything for print */
+  * {
+    box-sizing: border-box;
   }
-
-  /* Reset container for print */
+  
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Hide non-bill elements completely */
   .bill-preview-container {
-    position: static;
-    background: none;
-    padding: 0;
-    overflow: visible;
+    position: static !important;
+    background: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
   }
-
-  /* Invoice print layout */
+  
+  .bill-preview-controls,
+  .no-print {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    visibility: hidden !important;
+  }
+  
+  /* Make invoice the only content */
   .bill-invoice {
-    max-width: 100%;
-    box-shadow: none;
-    padding: 10mm;
-    margin: 0;
-    background: white;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    padding: 5mm !important;
+    margin: 0 !important;
+    background: white !important;
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+  }
+  
+  /* Ultra-compact header */
+  .business-name {
+    font-size: 16px !important;
+    margin: 0 0 2px 0 !important;
+  }
+  
+  .invoice-title {
+    font-size: 13px !important;
+    margin: 0 0 4px 0 !important;
+  }
+  
+  .bill-header {
+    margin-bottom: 8px !important;
+  }
+  
+  .bill-meta {
+    padding: 6px !important;
+  }
+  
+  .bill-meta p,
+  .business-address,
+  .business-contact,
+  .business-gstin {
+    font-size: 8px !important;
+    margin: 1px 0 !important;
+    line-height: 1.2 !important;
+  }
+  
+  /* Minimal dividers */
+  .bill-divider {
+    margin: 6px 0 !important;
+  }
+  
+  /* Compact customer section */
+  .bill-customer {
+    margin-bottom: 6px !important;
+  }
+  
+  .bill-customer h3 {
+    font-size: 10px !important;
+    margin: 0 0 2px 0 !important;
+  }
+  
+  .customer-name {
+    font-size: 9px !important;
+    margin: 1px 0 !important;
+  }
+  
+  .customer-phone,
+  .customer-address {
+    font-size: 8px !important;
+    margin: 1px 0 !important;
+  }
+  
+  /* Ultra-compact items table */
+  .items-table {
+    font-size: 8px !important;
+    margin-bottom: 6px !important;
+  }
+  
+  .items-table th,
+  .items-table td {
+    padding: 3px 2px !important;
+    line-height: 1.2 !important;
+  }
+  
+  .item-category {
+    font-size: 7px !important;
+  }
+  
+  /* Compact GST summary */
+  .bill-gst-summary {
+    margin-bottom: 6px !important;
+  }
+  
+  .bill-gst-summary h4 {
+    font-size: 9px !important;
+    margin: 0 0 3px 0 !important;
+  }
+  
+  .gst-summary-table {
+    font-size: 8px !important;
+  }
+  
+  .gst-summary-table th,
+  .gst-summary-table td {
+    padding: 3px 4px !important;
+    line-height: 1.2 !important;
+  }
+  
+  /* Compact totals */
+  .bill-totals {
+    margin-bottom: 6px !important;
+  }
+  
+  .totals-grid {
+    gap: 2px !important;
+  }
+  
+  .total-row {
+    padding: 1px 6px !important;
+    font-size: 9px !important;
+    min-width: 220px !important;
+  }
+  
+  .grand-total-row {
+    padding: 3px 6px !important;
+    margin-top: 2px !important;
+    font-size: 10px !important;
+  }
+  
+  .payable-row {
+    padding: 6px !important;
+    margin-top: 3px !important;
+    font-size: 11px !important;
+  }
+  
+  /* Minimal footer */
+  .bill-footer {
+    margin-top: 8px !important;
+  }
+  
+  .footer-info {
+    margin-bottom: 6px !important;
+  }
+  
+  .footer-info p {
+    font-size: 8px !important;
+    margin: 1px 0 !important;
+  }
+  
+  .footer-declaration {
+    padding-top: 6px !important;
+    margin-top: 6px !important;
+  }
+  
+  .declaration-text {
+    font-size: 7px !important;
+    margin: 2px 0 !important;
+  }
+  
+  .thank-you {
+    font-size: 9px !important;
+    margin: 3px 0 !important;
+  }
+  
+  .footer-meta {
+    margin-top: 6px !important;
+    padding-top: 3px !important;
+  }
+  
+  .generated-at {
+    font-size: 7px !important;
+  }
+  
+  /* Page setup - minimal margins */
+  @page {
+    size: A4;
+    margin: 8mm;
+  }
+  
+  /* Prevent orphans and widows */
+  .bill-invoice {
+    orphans: 2;
+    widows: 2;
+  }
+  
+  /* Smart page breaks - keep sections together */
+  .bill-header,
+  .bill-customer,
+  .bill-totals,
+  .bill-footer,
+  .bill-gst-summary {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  
+  .items-table thead {
+    display: table-header-group;
+  }
+  
+  .items-table tbody tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  
+  /* Allow page break before totals if needed */
+  .bill-totals {
+    page-break-before: auto;
   }
 
   /* Remove backgrounds for print */
@@ -432,23 +643,6 @@
     color: white !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-  }
-
-  /* Page breaks */
-  .bill-header,
-  .bill-customer,
-  .bill-totals,
-  .bill-footer {
-    page-break-inside: avoid;
-  }
-
-  .items-table {
-    page-break-inside: auto;
-  }
-
-  .items-table tr {
-    page-break-inside: avoid;
-    page-break-after: auto;
   }
 
   /* Ensure borders print */

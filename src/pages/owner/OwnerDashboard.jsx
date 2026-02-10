@@ -291,38 +291,57 @@ const OwnerDashboard = () => {
     try {
       setError('');
       
-      // Try to fetch existing bill from Firestore first
-      // Bills are linked to orders via orderId field
-      // For now, we'll regenerate the bill from order data
+      // Check if order has new schema with items array
+      const isNewSchema = order.items && Array.isArray(order.items);
       
-      // Get product details
-      const product = products.find(p => p.id === order.productId);
-      if (!product) {
-        setError('Product not found for this order');
-        return;
+      let cartItems;
+      if (isNewSchema) {
+        // New schema: order already has items array
+        cartItems = order.items.map(item => {
+          const product = products.find(p => p.id === item.productId);
+          return {
+            productId: item.productId,
+            name: item.productName,
+            sku: item.sku,
+            category: item.category || product?.category || 'Unknown',
+            subcategory: item.subcategory || product?.subcategory || item.category || 'Unknown',
+            quantity: item.quantity,
+            unitBasePrice: item.unitPrice,
+            unitSalePrice: null,
+            gstRate: product?.gstRate || 12,
+            isTaxInclusive: product?.isTaxInclusive || false,
+            isOnSale: false
+          };
+        });
+      } else {
+        // Old schema: single product order
+        const product = products.find(p => p.id === order.productId);
+        if (!product) {
+          setError('Product not found for this order');
+          return;
+        }
+        
+        cartItems = [{
+          productId: product.id,
+          name: product.name,
+          sku: product.sku,
+          category: product.category,
+          subcategory: product.subcategory || product.category,
+          quantity: order.quantity,
+          unitBasePrice: product.basePrice,
+          unitSalePrice: product.isOnSale ? product.salePrice : null,
+          gstRate: product.gstRate,
+          isTaxInclusive: product.isTaxInclusive,
+          isOnSale: product.isOnSale
+        }];
       }
       
       // Get employee details
       const employee = users.find(u => u.id === order.createdBy);
       
-      // Reconstruct cart item from order
-      const cartItem = {
-        productId: product.id,
-        name: product.name,
-        sku: product.sku,
-        category: product.category,
-        subcategory: product.subcategory || product.category,
-        quantity: order.quantity,
-        unitBasePrice: product.basePrice,
-        unitSalePrice: product.isOnSale ? product.salePrice : null,
-        gstRate: product.gstRate,
-        isTaxInclusive: product.isTaxInclusive,
-        isOnSale: product.isOnSale
-      };
-      
       // Calculate order
       const orderCalculation = calculateOrder({
-        items: [cartItem],
+        items: cartItems,
         employeeDiscount: 0
       });
       
@@ -334,7 +353,7 @@ const OwnerDashboard = () => {
         employeeName: employee?.name || employee?.email || 'Unknown',
         exhibitionId: order.exhibitionId || null,
         customer: {
-          name: order.customerPhone, // We don't have customer name in order
+          name: order.customerPhone,
           phone: order.customerPhone,
           address: ''
         }
@@ -791,9 +810,8 @@ const OwnerDashboard = () => {
                   <tr>
                     <th>Type</th>
                     <th>Customer Phone</th>
-                    <th>Product</th>
-                    <th>Quantity</th>
-                    <th>Price</th>
+                    <th>Items</th>
+                    <th>Total Amount</th>
                     <th>Status</th>
                     <th>Created By</th>
                     <th>Created At</th>
@@ -801,37 +819,58 @@ const OwnerDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOrders.map(order => (
-                    <tr key={order.id}>
-                      <td>
-                        <span className="type-badge">
-                          {order.type === 'daily' ? 'Store' : order.type === 'exhibition' ? 'Exhibition' : 'Pre-Booking'}
-                        </span>
-                      </td>
-                      <td>{order.customerPhone}</td>
-                      <td>{productMap[order.productId] || order.productId}</td>
-                      <td>{order.quantity}</td>
-                      <td>₹{order.price}</td>
-                      <td>
-                        <span className={`status-badge ${order.status === 'completed' ? 'active' : 'inactive'}`}>
-                          {order.status}
-                        </span>
-                      </td>
-                      <td>{userMap[order.createdBy] || order.createdBy}</td>
-                      <td>{order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString() : 'N/A'}</td>
-                      <td>
-                        {order.status === 'completed' && (
-                          <button
-                            onClick={() => handleViewBill(order)}
-                            className="btn-secondary"
-                            style={{ fontSize: '12px', padding: '4px 8px' }}
-                          >
-                            📄 View Bill
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredOrders.map(order => {
+                    // Handle both old and new order schema
+                    const isNewSchema = order.items && Array.isArray(order.items);
+                    const totalAmount = isNewSchema 
+                      ? order.totals?.payableAmount || order.totals?.grandTotal || 0
+                      : (order.price * order.quantity);
+                    
+                    return (
+                      <tr key={order.id}>
+                        <td>
+                          <span className="type-badge">
+                            {order.type === 'daily' ? 'Store' : order.type === 'exhibition' ? 'Exhibition' : 'Pre-Booking'}
+                          </span>
+                        </td>
+                        <td>{order.customerPhone}</td>
+                        <td>
+                          {isNewSchema ? (
+                            <div>
+                              {order.items.map((item, idx) => (
+                                <div key={idx} style={{ fontSize: '12px', marginBottom: '2px' }}>
+                                  {item.productName} (x{item.quantity})
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div>
+                              {productMap[order.productId] || order.productId} (x{order.quantity})
+                            </div>
+                          )}
+                        </td>
+                        <td>₹{totalAmount}</td>
+                        <td>
+                          <span className={`status-badge ${order.status === 'completed' ? 'active' : 'inactive'}`}>
+                            {order.status}
+                          </span>
+                        </td>
+                        <td>{userMap[order.createdBy] || order.createdBy}</td>
+                        <td>{order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString() : 'N/A'}</td>
+                        <td>
+                          {order.status === 'completed' && (
+                            <button
+                              onClick={() => handleViewBill(order)}
+                              className="btn-secondary"
+                              style={{ fontSize: '12px', padding: '4px 8px' }}
+                            >
+                              📄 View Bill
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
