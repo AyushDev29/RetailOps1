@@ -5,7 +5,10 @@ import { getActiveProducts } from '../../services/productService';
 import { getActiveExhibition, startExhibition, endExhibition } from '../../services/exhibitionService';
 import { createOrder, getPendingPreBookings, convertPreBookingToSale } from '../../services/orderService';
 import { getCustomerByPhone, createOrUpdateCustomer } from '../../services/customerService';
-import { seedProducts } from '../../utils/seedProducts';
+import { calculateOrder } from '../../services/orderCalculationService';
+import { generateBill } from '../../services/billingService';
+import { saveBill, getTodaysBills } from '../../services/billStorageService';
+import BillPreview from '../../components/billing/BillPreview';
 import '../../styles/EmployeeDashboard.css';
 
 const EmployeeDashboard = () => {
@@ -18,6 +21,12 @@ const EmployeeDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [currentBill, setCurrentBill] = useState(null);
+  const [showBill, setShowBill] = useState(false);
+  const [todaysBills, setTodaysBills] = useState([]);
+  
+  // Cart state for multi-product orders
+  const [cart, setCart] = useState([]);
   
   const [orderType, setOrderType] = useState('store');
   const [formData, setFormData] = useState({
@@ -26,11 +35,12 @@ const EmployeeDashboard = () => {
     customerAddress: '',
     customerGender: '',
     customerAgeGroup: '',
-    productId: '',
-    price: '',
-    quantity: 1,
     deliveryDate: ''
   });
+  
+  // Product selection state
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
   
   const [exhibitionForm, setExhibitionForm] = useState({
     location: '',
@@ -57,25 +67,21 @@ const EmployeeDashboard = () => {
       setProducts(productsData);
       setActiveExhibition(exhibitionData);
       setPreBookings(preBookingsData);
-    } catch (err) {
-      setError('Failed to load data: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSeedProducts = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      setSuccess('');
       
-      await seedProducts();
-      await loadData();
-      
-      setSuccess('Sample products added successfully!');
+      // Load bills separately to avoid blocking other data
+      try {
+        const billsData = await getTodaysBills(user.uid);
+        setTodaysBills(billsData);
+      } catch (billError) {
+        console.error('Error loading bills:', billError);
+        // Don't fail the whole load if bills fail
+        setTodaysBills([]);
+      }
     } catch (err) {
-      setError('Failed to seed products: ' + err.message);
+      // Only show error if it's not a "no products" scenario
+      if (!err.message.includes('Missing or insufficient permissions')) {
+        setError('Failed to load data: ' + err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -123,6 +129,79 @@ const EmployeeDashboard = () => {
     }
   };
 
+  // Add product to cart
+  const handleAddToCart = () => {
+    if (!selectedProductId) {
+      setError('Please select a product');
+      return;
+    }
+    
+    if (selectedQuantity <= 0) {
+      setError('Quantity must be at least 1');
+      return;
+    }
+    
+    const product = products.find(p => p.id === selectedProductId);
+    if (!product) {
+      setError('Product not found');
+      return;
+    }
+    
+    // Check if product already in cart
+    const existingIndex = cart.findIndex(item => item.productId === selectedProductId);
+    
+    if (existingIndex >= 0) {
+      // Update quantity
+      const newCart = [...cart];
+      newCart[existingIndex].quantity += selectedQuantity;
+      setCart(newCart);
+    } else {
+      // Add new item with complete structure required by orderCalculationService
+      setCart([...cart, {
+        productId: product.id,
+        name: product.name,
+        sku: product.sku,
+        category: product.category,
+        subcategory: product.subcategory || product.category,
+        quantity: selectedQuantity,
+        unitBasePrice: product.basePrice,  // Changed from basePrice
+        unitSalePrice: product.isOnSale ? product.salePrice : null,  // Changed from salePrice
+        gstRate: product.gstRate,
+        isTaxInclusive: product.isTaxInclusive,
+        isOnSale: product.isOnSale
+      }]);
+    }
+    
+    // Reset selection
+    setSelectedProductId('');
+    setSelectedQuantity(1);
+    setError('');
+  };
+
+  // Remove item from cart
+  const handleRemoveFromCart = (productId) => {
+    setCart(cart.filter(item => item.productId !== productId));
+  };
+
+  // Update cart item quantity
+  const handleUpdateCartQuantity = (productId, newQuantity) => {
+    if (newQuantity <= 0) {
+      handleRemoveFromCart(productId);
+      return;
+    }
+    
+    setCart(cart.map(item => 
+      item.productId === productId 
+        ? { ...item, quantity: newQuantity }
+        : item
+    ));
+  };
+
+  // Clear cart
+  const handleClearCart = () => {
+    setCart([]);
+  };
+
   const handleCreateOrder = async (e) => {
     e.preventDefault();
     
@@ -130,8 +209,13 @@ const EmployeeDashboard = () => {
       setError('');
       setSuccess('');
       
-      if (!formData.customerPhone || !formData.customerName || !formData.productId || !formData.price) {
-        setError('Please fill in all required fields');
+      if (!formData.customerPhone || !formData.customerName) {
+        setError('Please fill in customer information');
+        return;
+      }
+      
+      if (cart.length === 0) {
+        setError('Please add at least one product to cart');
         return;
       }
       
@@ -167,40 +251,107 @@ const EmployeeDashboard = () => {
         exhibitionId = null;
       }
       
-      const orderData = {
-        type: finalOrderType,
-        customerPhone: formData.customerPhone,
-        productId: formData.productId,
-        price: parseFloat(formData.price),
-        quantity: parseInt(formData.quantity),
-        status: orderType === 'prebooking' ? 'pending' : 'completed',
-        exhibitionId,
-        createdBy: user.uid,
-        deliveryDate: orderType === 'prebooking' ? formData.deliveryDate : null
-      };
+      // Generate bill FIRST for completed orders (not pre-bookings)
+      let bill = null;
+      if (orderType !== 'prebooking') {
+        try {
+          // Calculate order
+          const orderCalculation = calculateOrder({
+            items: cart,
+            employeeDiscount: 0
+          });
+          
+          console.log('Order calculation:', orderCalculation);
+          
+          // Generate bill
+          bill = generateBill(orderCalculation, {
+            orderId: 'TEMP-' + Date.now(), // Temporary ID, will update after order creation
+            orderType: finalOrderType,
+            employeeId: user.uid,
+            employeeName: userProfile?.name || user.email,
+            exhibitionId: exhibitionId,
+            customer: {
+              name: formData.customerName,
+              phone: formData.customerPhone,
+              address: formData.customerAddress || ''
+            }
+          });
+          
+          console.log('Generated bill:', bill);
+        } catch (billError) {
+          console.error('Bill generation error:', billError);
+          throw new Error('Bill generation failed: ' + billError.message);
+        }
+      }
       
-      await createOrder(orderData);
+      // Only create orders if bill generation succeeded (or if it's a pre-booking)
+      const createdOrders = [];
+      for (const cartItem of cart) {
+        const orderData = {
+          type: finalOrderType,
+          customerPhone: formData.customerPhone,
+          productId: cartItem.productId,
+          price: cartItem.unitSalePrice || cartItem.unitBasePrice,
+          quantity: cartItem.quantity,
+          status: orderType === 'prebooking' ? 'pending' : 'completed',
+          exhibitionId,
+          createdBy: user.uid,
+          deliveryDate: orderType === 'prebooking' ? formData.deliveryDate : null
+        };
+        
+        const createdOrder = await createOrder(orderData);
+        createdOrders.push(createdOrder);
+      }
+      
+      // Show bill preview and save if generated
+      if (bill) {
+        // Update bill with actual order ID
+        bill.orderId = createdOrders[0]?.id || bill.orderId;
+        
+        // Save bill to Firestore
+        try {
+          const billId = await saveBill(bill);
+          console.log('Bill saved to Firestore with ID:', billId);
+          
+          // Reload today's bills to show the new bill
+          try {
+            const updatedBills = await getTodaysBills(user.uid);
+            setTodaysBills(updatedBills);
+          } catch (reloadError) {
+            console.error('Failed to reload bills:', reloadError);
+          }
+        } catch (saveError) {
+          console.error('Failed to save bill:', saveError);
+          // Don't fail the whole operation if bill save fails
+        }
+        
+        setCurrentBill(bill);
+        setShowBill(true);
+        console.log('Showing bill preview');
+      }
       
       const orderTypeLabel = orderType === 'store' ? 'Store Sale' : 
                             orderType === 'exhibition' ? 'Exhibition Sale' : 
                             'Pre-booking';
       setSuccess(`${orderTypeLabel} created successfully!`);
       
+      await loadData();
+      
+      // Reset form and cart ONLY after successful completion
       setFormData({
         customerPhone: '',
         customerName: '',
         customerAddress: '',
         customerGender: '',
         customerAgeGroup: '',
-        productId: '',
-        price: '',
-        quantity: 1,
         deliveryDate: ''
       });
+      setCart([]);
       
-      await loadData();
     } catch (err) {
+      // DON'T clear form on error - let user see what they entered
       setError('Failed to create order: ' + err.message);
+      console.error('Order creation error:', err);
     }
   };
 
@@ -524,32 +675,25 @@ const EmployeeDashboard = () => {
 
                   {/* Right Column - Product Section */}
                   <div className="emp-form-column">
-                    <h4 className="emp-form-section-title">Product Details</h4>
+                    <h4 className="emp-form-section-title">Add Products to Cart</h4>
                     
                     <div className="emp-form-group">
-                      <label className="emp-label">Product *</label>
+                      <label className="emp-label">Select Product *</label>
                       {products.length === 0 ? (
                         <div className="emp-empty-state">
-                          <p>No products available</p>
-                          <button 
-                            type="button"
-                            onClick={handleSeedProducts}
-                            className="emp-btn emp-btn-secondary emp-btn-sm"
-                          >
-                            Add Sample Products
-                          </button>
+                          <p>No products available. Contact owner to add products.</p>
                         </div>
                       ) : (
                         <select
                           className="emp-select"
-                          value={formData.productId}
-                          onChange={(e) => setFormData({...formData, productId: e.target.value})}
-                          required
+                          value={selectedProductId}
+                          onChange={(e) => setSelectedProductId(e.target.value)}
                         >
                           <option value="">Select product</option>
                           {products.map(product => (
                             <option key={product.id} value={product.id}>
-                              {product.name} ({product.category})
+                              {product.name} - ₹{product.isOnSale ? product.salePrice : product.basePrice}
+                              {product.isOnSale && ' (SALE)'}
                             </option>
                           ))}
                         </select>
@@ -558,34 +702,135 @@ const EmployeeDashboard = () => {
 
                     <div className="emp-form-row">
                       <div className="emp-form-group">
-                        <label className="emp-label">Price *</label>
+                        <label className="emp-label">Quantity</label>
                         <input
                           type="number"
                           className="emp-input"
-                          value={formData.price}
-                          onChange={(e) => setFormData({...formData, price: e.target.value})}
-                          placeholder="₹"
-                          min="0"
-                          step="0.01"
-                          required
+                          value={selectedQuantity}
+                          onChange={(e) => setSelectedQuantity(parseInt(e.target.value) || 1)}
+                          min="1"
                         />
                       </div>
 
-                      <div className="emp-form-group">
-                        <label className="emp-label">Quantity *</label>
-                        <input
-                          type="number"
-                          className="emp-input"
-                          value={formData.quantity}
-                          onChange={(e) => setFormData({...formData, quantity: e.target.value})}
-                          min="1"
-                          required
-                        />
+                      <div className="emp-form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                        <button
+                          type="button"
+                          onClick={handleAddToCart}
+                          className="emp-btn emp-btn-secondary"
+                          disabled={!selectedProductId}
+                        >
+                          ➕ Add to Cart
+                        </button>
                       </div>
                     </div>
 
+                    {/* Cart Display */}
+                    {cart.length > 0 && (
+                      <div className="emp-cart-display" style={{ marginTop: '16px', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <h5 style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>Cart ({cart.length} items)</h5>
+                          <button
+                            type="button"
+                            onClick={handleClearCart}
+                            className="emp-btn emp-btn-sm"
+                            style={{ fontSize: '11px', padding: '4px 8px' }}
+                          >
+                            Clear All
+                          </button>
+                        </div>
+                        {cart.map((item, index) => {
+                          const effectivePrice = item.unitSalePrice || item.unitBasePrice;
+                          const itemTotal = effectivePrice * item.quantity;
+                          const discount = item.unitSalePrice ? (item.unitBasePrice - item.unitSalePrice) * item.quantity : 0;
+                          
+                          return (
+                            <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', background: 'white', borderRadius: '4px', marginBottom: '4px' }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '13px', fontWeight: '500' }}>
+                                  {item.name}
+                                  {item.unitSalePrice && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#10b981', color: 'white', padding: '2px 6px', borderRadius: '3px' }}>SALE</span>}
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#64748b' }}>
+                                  {item.unitSalePrice && (
+                                    <span style={{ textDecoration: 'line-through', marginRight: '6px' }}>₹{item.unitBasePrice}</span>
+                                  )}
+                                  ₹{effectivePrice} × {item.quantity} = ₹{itemTotal.toFixed(2)}
+                                  {discount > 0 && <span style={{ color: '#10b981', marginLeft: '6px' }}>(Save ₹{discount.toFixed(2)})</span>}
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateCartQuantity(item.productId, item.quantity - 1)}
+                                  style={{ padding: '2px 6px', fontSize: '12px', background: '#e2e8f0', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                                >
+                                  −
+                                </button>
+                                <span style={{ fontSize: '12px', minWidth: '20px', textAlign: 'center' }}>{item.quantity}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateCartQuantity(item.productId, item.quantity + 1)}
+                                  style={{ padding: '2px 6px', fontSize: '12px', background: '#e2e8f0', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                                >
+                                  +
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveFromCart(item.productId)}
+                                  style={{ padding: '2px 6px', fontSize: '12px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '3px', cursor: 'pointer', marginLeft: '4px' }}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        
+                        {/* Cart Summary with GST */}
+                        {(() => {
+                          try {
+                            const orderCalc = calculateOrder({ items: cart, employeeDiscount: 0 });
+                            return (
+                              <div style={{ marginTop: '12px', padding: '12px', background: 'white', borderRadius: '4px', border: '2px solid #0f172a' }}>
+                                <div style={{ fontSize: '12px', marginBottom: '6px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                    <span>Subtotal:</span>
+                                    <span>₹{orderCalc.summary.subtotal.toFixed(2)}</span>
+                                  </div>
+                                  {orderCalc.summary.totalDiscount > 0 && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', color: '#10b981' }}>
+                                      <span>Discount:</span>
+                                      <span>- ₹{orderCalc.summary.totalDiscount.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                    <span>CGST:</span>
+                                    <span>₹{orderCalc.summary.totalCGST.toFixed(2)}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                    <span>SGST:</span>
+                                    <span>₹{orderCalc.summary.totalSGST.toFixed(2)}</span>
+                                  </div>
+                                  <div style={{ borderTop: '1px solid #e2e8f0', marginTop: '6px', paddingTop: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '700' }}>
+                                    <span>Total Amount:</span>
+                                    <span>₹{Math.round(orderCalc.summary.grandTotal)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          } catch (err) {
+                            return (
+                              <div style={{ marginTop: '12px', padding: '8px', background: '#fee2e2', color: '#dc2626', borderRadius: '4px', fontSize: '11px' }}>
+                                Error calculating total: {err.message}
+                              </div>
+                            );
+                          }
+                        })()}
+                      </div>
+                    )}
+
                     {orderType === 'prebooking' && (
-                      <div className="emp-form-group">
+                      <div className="emp-form-group" style={{ marginTop: '16px' }}>
                         <label className="emp-label">Delivery Date *</label>
                         <input
                           type="date"
@@ -602,7 +847,7 @@ const EmployeeDashboard = () => {
                 <button 
                   type="submit" 
                   className="emp-btn emp-btn-primary emp-btn-lg emp-btn-block"
-                  disabled={products.length === 0 || (orderType === 'exhibition' && !activeExhibition)}
+                  disabled={cart.length === 0 || (orderType === 'exhibition' && !activeExhibition)}
                 >
                   {orderType === 'prebooking' ? 'Create Pre-Booking' : 
                    orderType === 'exhibition' ? 'Create Exhibition Sale' : 
@@ -653,8 +898,89 @@ const EmployeeDashboard = () => {
               </div>
             </div>
           )}
+
+          {/* Today's Sales Section */}
+          {todaysBills.length > 0 && (
+            <div className="emp-card">
+              <div className="emp-card-header">
+                <div>
+                  <h3 className="emp-card-title">Today's Sales</h3>
+                  <p className="emp-card-subtitle">{todaysBills.length} bills generated today</p>
+                </div>
+              </div>
+              
+              <div className="emp-prebookings-grid">
+                {todaysBills.map(bill => (
+                  <div key={bill.id} className="emp-prebooking-card">
+                    <div className="emp-prebooking-header">
+                      <span className="emp-prebooking-phone">{bill.billNumber}</span>
+                      <span className="emp-badge emp-badge-success">Completed</span>
+                    </div>
+                    <div className="emp-prebooking-details">
+                      <div className="emp-prebooking-row">
+                        <span className="emp-prebooking-label">Customer</span>
+                        <span className="emp-prebooking-value">{bill.customer?.name || 'N/A'}</span>
+                      </div>
+                      <div className="emp-prebooking-row">
+                        <span className="emp-prebooking-label">Phone</span>
+                        <span className="emp-prebooking-value">{bill.customer?.phone || 'N/A'}</span>
+                      </div>
+                      <div className="emp-prebooking-row">
+                        <span className="emp-prebooking-label">Amount</span>
+                        <span className="emp-prebooking-value">₹{bill.totals?.payableAmount || 0}</span>
+                      </div>
+                      <div className="emp-prebooking-row">
+                        <span className="emp-prebooking-label">Time</span>
+                        <span className="emp-prebooking-value">
+                          {(() => {
+                            if (!bill.billDate) return 'N/A';
+                            
+                            let date;
+                            // Handle Firestore Timestamp
+                            if (bill.billDate.toDate && typeof bill.billDate.toDate === 'function') {
+                              date = bill.billDate.toDate();
+                            } else {
+                              date = new Date(bill.billDate);
+                            }
+                            
+                            // Check if date is valid
+                            if (isNaN(date.getTime())) return 'Invalid Date';
+                            
+                            return date.toLocaleTimeString('en-IN', { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            });
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setCurrentBill(bill);
+                        setShowBill(true);
+                      }}
+                      className="emp-btn emp-btn-primary emp-btn-sm emp-btn-block"
+                    >
+                      View Bill
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Bill Preview Modal */}
+      {showBill && currentBill && (
+        <BillPreview 
+          bill={currentBill} 
+          onClose={() => {
+            setShowBill(false);
+            setCurrentBill(null);
+          }} 
+        />
+      )}
     </div>
   );
 };

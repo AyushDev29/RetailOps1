@@ -1,0 +1,223 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user is owner
+    function isOwner() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'owner';
+    }
+    
+    // Check if user is employee
+    function isEmployee() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employee';
+    }
+    
+    // Check if user is active
+    function isActiveUser() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true;
+    }
+    
+    // ============================================================================
+    // USERS COLLECTION
+    // ============================================================================
+    
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Owners can read all users
+      allow read: if isOwner();
+      
+      // Owners can update user roles and status
+      allow update: if isOwner();
+      
+      // No one can delete users
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // PRODUCTS COLLECTION (CRITICAL - PRICING & INVENTORY PROTECTION)
+    // ============================================================================
+    
+    match /products/{productId} {
+      
+      // EMPLOYEES: Read-only access to ACTIVE products only
+      // Allow get for single document reads
+      allow get: if isEmployee() && 
+                    isActiveUser() && 
+                    resource.data.isActive == true;
+      
+      // Allow list for querying - filter happens in query
+      allow list: if isEmployee() && isActiveUser();
+      
+      // OWNERS: Full read and list access (including inactive products)
+      allow read, list: if isOwner() && isActiveUser();
+      
+      // OWNERS ONLY: Create products
+      allow create: if isOwner() && 
+                       isActiveUser() &&
+                       // Validate required fields
+                       request.resource.data.keys().hasAll([
+                         'name', 'sku', 'category', 'subcategory',
+                         'basePrice', 'gstRate', 'isTaxInclusive',
+                         'isOnSale', 'salePrice', 'stockQty',
+                         'lowStockThreshold', 'isActive',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       // Validate data types
+                       request.resource.data.name is string &&
+                       request.resource.data.sku is string &&
+                       request.resource.data.category in ['men', 'women', 'kids'] &&
+                       request.resource.data.subcategory is string &&
+                       request.resource.data.basePrice is number &&
+                       request.resource.data.basePrice > 0 &&
+                       request.resource.data.gstRate in [5, 12, 18] &&
+                       request.resource.data.isTaxInclusive is bool &&
+                       request.resource.data.isOnSale is bool &&
+                       (request.resource.data.salePrice == null || request.resource.data.salePrice is number) &&
+                       request.resource.data.stockQty is number &&
+                       request.resource.data.stockQty >= 0 &&
+                       request.resource.data.lowStockThreshold is number &&
+                       request.resource.data.lowStockThreshold >= 0 &&
+                       request.resource.data.isActive is bool &&
+                       // CRITICAL: Sale price must be lower than base price
+                       (request.resource.data.salePrice == null || 
+                        request.resource.data.salePrice < request.resource.data.basePrice) &&
+                       // If on sale, sale price must be set
+                       (!request.resource.data.isOnSale || request.resource.data.salePrice != null);
+      
+      // OWNERS ONLY: Update products
+      allow update: if isOwner() && 
+                       isActiveUser() &&
+                       // CRITICAL: If sale price is being updated, it must be lower than base price
+                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['salePrice']) ||
+                        request.resource.data.salePrice == null ||
+                        request.resource.data.salePrice < request.resource.data.basePrice) &&
+                       // If turning on sale, sale price must be set
+                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isOnSale']) ||
+                        !request.resource.data.isOnSale ||
+                        request.resource.data.salePrice != null) &&
+                       // Validate updated timestamp
+                       request.resource.data.updatedAt is timestamp;
+      
+      // NO ONE can delete products (soft delete via isActive flag)
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // CUSTOMERS COLLECTION
+    // ============================================================================
+    
+    match /customers/{customerId} {
+      // Employees and owners can read and write customers
+      allow read, write: if (isEmployee() || isOwner()) && isActiveUser();
+    }
+    
+    // ============================================================================
+    // ORDERS COLLECTION
+    // ============================================================================
+    
+    match /orders/{orderId} {
+      // Employees can create orders
+      allow create: if isEmployee() && 
+                       isActiveUser() &&
+                       request.resource.data.createdBy == request.auth.uid;
+      
+      // Employees can read their own orders
+      allow get: if isEmployee() && 
+                    isActiveUser() &&
+                    resource.data.createdBy == request.auth.uid;
+      
+      // Employees can list/query their own orders
+      allow list: if isEmployee() && isActiveUser();
+      
+      // Employees can update their own orders (for pre-booking conversion)
+      allow update: if isEmployee() && 
+                       isActiveUser() &&
+                       resource.data.createdBy == request.auth.uid;
+      
+      // Owners can read and list all orders
+      allow read, list: if isOwner() && isActiveUser();
+      
+      // No one can delete orders
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // EXHIBITIONS COLLECTION
+    // ============================================================================
+    
+    match /exhibitions/{exhibitionId} {
+      // Employees can create exhibitions
+      allow create: if isEmployee() && 
+                       isActiveUser() &&
+                       request.resource.data.createdBy == request.auth.uid;
+      
+      // Employees can read their own exhibitions
+      allow get: if isEmployee() && 
+                    isActiveUser() &&
+                    resource.data.createdBy == request.auth.uid;
+      
+      // Employees can list/query their own exhibitions
+      allow list: if isEmployee() && isActiveUser();
+      
+      // Employees can update their own exhibitions
+      allow update: if isEmployee() && 
+                       isActiveUser() &&
+                       resource.data.createdBy == request.auth.uid;
+      
+      // Owners can read and list all exhibitions
+      allow read, list: if isOwner() && isActiveUser();
+      
+      // No one can delete exhibitions
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // BILLS COLLECTION
+    // ============================================================================
+    
+    match /bills/{billId} {
+      // Employees can create bills
+      allow create: if isEmployee() && 
+                       isActiveUser() &&
+                       request.resource.data.employeeId == request.auth.uid;
+      
+      // Employees can read their own bills
+      allow get: if isEmployee() && 
+                    isActiveUser() &&
+                    resource.data.employeeId == request.auth.uid;
+      
+      // Employees can list/query their own bills
+      allow list: if isEmployee() && isActiveUser();
+      
+      // Owners can read and list all bills
+      allow read, list: if isOwner() && isActiveUser();
+      
+      // No one can update or delete bills (immutable)
+      allow update, delete: if false;
+    }
+    
+    // ============================================================================
+    // DEFAULT DENY
+    // ============================================================================
+    
+    // Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

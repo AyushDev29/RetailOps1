@@ -5,6 +5,7 @@ import EmployeeDashboard from '../pages/dashboard/EmployeeDashboard';
 import EmployeeAnalytics from '../pages/analytics/EmployeeAnalytics';
 import OwnerDashboard from '../pages/owner/OwnerDashboard';
 import OwnerAnalytics from '../pages/owner/OwnerAnalytics';
+import BillPreviewTest from '../pages/test/BillPreviewTest';
 import ProtectedRoute from '../components/layout/ProtectedRoute';
 
 function AppRoutes() {
@@ -49,6 +50,9 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
+
+      {/* Test Routes (Development Only) */}
+      <Route path="/test/bill-preview" element={<BillPreviewTest />} />
 
       {/* Default redirect */}
       <Route path="/" element={<Navigate to="/login" replace />} />

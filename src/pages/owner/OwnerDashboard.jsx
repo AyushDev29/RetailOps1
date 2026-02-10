@@ -2,9 +2,15 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { getAllUsers, updateUser } from '../../services/authService';
-import { getAllProducts, createProduct, updateProduct } from '../../services/productService';
+import { getAllProducts, createProduct, updateProduct, toggleProductActive } from '../../services/productService';
+import { seedProducts } from '../../utils/seedProducts';
+import { fixOwnerActive } from '../../utils/fixOwnerActive';
 import { getAllExhibitions } from '../../services/exhibitionService';
 import { getAllOrders } from '../../services/orderService';
+import { getBillById } from '../../services/billStorageService';
+import { generateBill } from '../../services/billingService';
+import { calculateOrder } from '../../services/orderCalculationService';
+import BillPreview from '../../components/billing/BillPreview';
 import '../../styles/OwnerDashboard.css';
 
 const OwnerDashboard = () => {
@@ -21,10 +27,24 @@ const OwnerDashboard = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
+  // Bill viewing state
+  const [currentBill, setCurrentBill] = useState(null);
+  const [showBill, setShowBill] = useState(false);
+  
   // Product form state
   const [productForm, setProductForm] = useState({
     name: '',
-    category: ''
+    sku: '',
+    category: 'men',
+    subcategory: '',
+    basePrice: '',
+    gstRate: 12,
+    isTaxInclusive: false,
+    isOnSale: false,
+    salePrice: '',
+    stockQty: '',
+    lowStockThreshold: 10,
+    isActive: true
   });
   
   // Filters
@@ -82,6 +102,9 @@ const OwnerDashboard = () => {
           getAllProducts()
         ]);
         setOrders(ordersData);
+        setUsers(usersData); // Set users array for handleViewBill
+        setProducts(productsData); // Set products array for handleViewBill
+        
         // Build lookup maps
         const uMap = {};
         usersData.forEach(u => {
@@ -158,18 +181,52 @@ const OwnerDashboard = () => {
       setError('');
       setSuccess('');
       
-      if (!productForm.name || !productForm.category) {
-        setError('Please fill in all fields');
+      // Validate required fields
+      if (!productForm.name || !productForm.sku || !productForm.category || !productForm.subcategory || 
+          !productForm.basePrice || !productForm.stockQty) {
+        setError('Please fill in all required fields');
         return;
       }
       
-      await createProduct({
+      // Validate sale price if on sale
+      if (productForm.isOnSale && !productForm.salePrice) {
+        setError('Sale price is required when product is on sale');
+        return;
+      }
+      
+      // Prepare product data
+      const productData = {
         name: productForm.name,
-        category: productForm.category
-      });
+        sku: productForm.sku,
+        category: productForm.category,
+        subcategory: productForm.subcategory,
+        basePrice: parseFloat(productForm.basePrice),
+        gstRate: parseInt(productForm.gstRate),
+        isTaxInclusive: productForm.isTaxInclusive,
+        isOnSale: productForm.isOnSale,
+        salePrice: productForm.isOnSale ? parseFloat(productForm.salePrice) : null,
+        stockQty: parseInt(productForm.stockQty),
+        lowStockThreshold: parseInt(productForm.lowStockThreshold),
+        isActive: productForm.isActive
+      };
+      
+      await createProduct(productData);
       
       setSuccess('Product created successfully');
-      setProductForm({ name: '', category: '' });
+      setProductForm({
+        name: '',
+        sku: '',
+        category: 'men',
+        subcategory: '',
+        basePrice: '',
+        gstRate: 12,
+        isTaxInclusive: false,
+        isOnSale: false,
+        salePrice: '',
+        stockQty: '',
+        lowStockThreshold: 10,
+        isActive: true
+      });
       await loadData();
     } catch (err) {
       setError('Failed to create product: ' + err.message);
@@ -186,11 +243,36 @@ const OwnerDashboard = () => {
       setError('');
       setSuccess('');
       
-      await updateProduct(productId, { active: !currentStatus });
+      await toggleProductActive(productId, !currentStatus);
       setSuccess(`Product ${!currentStatus ? 'activated' : 'deactivated'} successfully`);
       await loadData();
     } catch (err) {
       setError('Failed to update product: ' + err.message);
+    }
+  };
+
+  // Handle seed products
+  const handleSeedProducts = async () => {
+    if (!window.confirm('This will add 12 sample products to your database. Continue?')) {
+      return;
+    }
+    
+    try {
+      setError('');
+      setSuccess('');
+      
+      // First, ensure owner has isActive field
+      try {
+        await fixOwnerActive(user.uid);
+      } catch (fixError) {
+        console.log('Note: Could not verify isActive field:', fixError.message);
+      }
+      
+      await seedProducts();
+      setSuccess('Sample products added successfully!');
+      await loadData();
+    } catch (err) {
+      setError('Failed to seed products: ' + err.message);
     }
   };
 
@@ -201,6 +283,68 @@ const OwnerDashboard = () => {
       navigate('/login');
     } catch (err) {
       setError('Failed to logout: ' + err.message);
+    }
+  };
+
+  // Handle view bill for an order
+  const handleViewBill = async (order) => {
+    try {
+      setError('');
+      
+      // Try to fetch existing bill from Firestore first
+      // Bills are linked to orders via orderId field
+      // For now, we'll regenerate the bill from order data
+      
+      // Get product details
+      const product = products.find(p => p.id === order.productId);
+      if (!product) {
+        setError('Product not found for this order');
+        return;
+      }
+      
+      // Get employee details
+      const employee = users.find(u => u.id === order.createdBy);
+      
+      // Reconstruct cart item from order
+      const cartItem = {
+        productId: product.id,
+        name: product.name,
+        sku: product.sku,
+        category: product.category,
+        subcategory: product.subcategory || product.category,
+        quantity: order.quantity,
+        unitBasePrice: product.basePrice,
+        unitSalePrice: product.isOnSale ? product.salePrice : null,
+        gstRate: product.gstRate,
+        isTaxInclusive: product.isTaxInclusive,
+        isOnSale: product.isOnSale
+      };
+      
+      // Calculate order
+      const orderCalculation = calculateOrder({
+        items: [cartItem],
+        employeeDiscount: 0
+      });
+      
+      // Generate bill
+      const bill = generateBill(orderCalculation, {
+        orderId: order.id,
+        orderType: order.type,
+        employeeId: order.createdBy,
+        employeeName: employee?.name || employee?.email || 'Unknown',
+        exhibitionId: order.exhibitionId || null,
+        customer: {
+          name: order.customerPhone, // We don't have customer name in order
+          phone: order.customerPhone,
+          address: ''
+        }
+      });
+      
+      setCurrentBill(bill);
+      setShowBill(true);
+    } catch (err) {
+      setError('Failed to generate bill: ' + err.message);
+      console.error('Bill generation error:', err);
     }
   };
 
@@ -327,63 +471,236 @@ const OwnerDashboard = () => {
       {/* Product Management Tab */}
       {activeTab === 'products' && (
         <div className="dashboard-section">
-          <h2>Product Management</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2>Product Management</h2>
+            <button onClick={handleSeedProducts} className="btn btn-secondary">
+              Add Sample Products
+            </button>
+          </div>
           
           <form onSubmit={handleCreateProduct} className="product-form">
             <h3>Create New Product</h3>
-            <div className="form-row">
-              <input
-                type="text"
-                placeholder="Product Name"
-                value={productForm.name}
-                onChange={(e) => setProductForm({...productForm, name: e.target.value})}
-                required
-              />
-              <input
-                type="text"
-                placeholder="Category"
-                value={productForm.category}
-                onChange={(e) => setProductForm({...productForm, category: e.target.value})}
-                required
-              />
-              <button type="submit" className="btn btn-primary">
-                Create Product
-              </button>
+            
+            <div className="form-grid">
+              {/* Left Column */}
+              <div className="form-column">
+                <div className="form-group">
+                  <label>Product Name *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Classic Cotton T-Shirt"
+                    value={productForm.name}
+                    onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>SKU *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., MEN-TSH-001"
+                    value={productForm.sku}
+                    onChange={(e) => setProductForm({...productForm, sku: e.target.value.toUpperCase()})}
+                    required
+                  />
+                  <small>Unique product identifier (auto-uppercase)</small>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Category *</label>
+                    <select
+                      value={productForm.category}
+                      onChange={(e) => setProductForm({...productForm, category: e.target.value})}
+                      required
+                    >
+                      <option value="men">Men</option>
+                      <option value="women">Women</option>
+                      <option value="kids">Kids</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Subcategory *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Tshirt, Jeans, Kurti"
+                      value={productForm.subcategory}
+                      onChange={(e) => setProductForm({...productForm, subcategory: e.target.value})}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Base Price (₹) *</label>
+                    <input
+                      type="number"
+                      placeholder="999"
+                      value={productForm.basePrice}
+                      onChange={(e) => setProductForm({...productForm, basePrice: e.target.value})}
+                      min="0"
+                      step="0.01"
+                      required
+                    />
+                    <small>GST-exclusive price</small>
+                  </div>
+
+                  <div className="form-group">
+                    <label>GST Rate *</label>
+                    <select
+                      value={productForm.gstRate}
+                      onChange={(e) => setProductForm({...productForm, gstRate: parseInt(e.target.value)})}
+                      required
+                    >
+                      <option value="5">5%</option>
+                      <option value="12">12%</option>
+                      <option value="18">18%</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={productForm.isTaxInclusive}
+                      onChange={(e) => setProductForm({...productForm, isTaxInclusive: e.target.checked})}
+                    />
+                    {' '}Tax Inclusive Price
+                  </label>
+                  <small>Check if base price includes GST</small>
+                </div>
+              </div>
+
+              {/* Right Column */}
+              <div className="form-column">
+                <div className="form-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={productForm.isOnSale}
+                      onChange={(e) => setProductForm({...productForm, isOnSale: e.target.checked})}
+                    />
+                    {' '}Product On Sale
+                  </label>
+                </div>
+
+                {productForm.isOnSale && (
+                  <div className="form-group">
+                    <label>Sale Price (₹) *</label>
+                    <input
+                      type="number"
+                      placeholder="Must be less than base price"
+                      value={productForm.salePrice}
+                      onChange={(e) => setProductForm({...productForm, salePrice: e.target.value})}
+                      min="0"
+                      step="0.01"
+                      required={productForm.isOnSale}
+                    />
+                    <small>Must be lower than base price</small>
+                  </div>
+                )}
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Stock Quantity *</label>
+                    <input
+                      type="number"
+                      placeholder="100"
+                      value={productForm.stockQty}
+                      onChange={(e) => setProductForm({...productForm, stockQty: e.target.value})}
+                      min="0"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Low Stock Alert</label>
+                    <input
+                      type="number"
+                      placeholder="10"
+                      value={productForm.lowStockThreshold}
+                      onChange={(e) => setProductForm({...productForm, lowStockThreshold: e.target.value})}
+                      min="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={productForm.isActive}
+                      onChange={(e) => setProductForm({...productForm, isActive: e.target.checked})}
+                    />
+                    {' '}Active (visible to employees)
+                  </label>
+                </div>
+              </div>
             </div>
+
+            <button type="submit" className="btn btn-primary btn-lg">
+              Create Product
+            </button>
           </form>
 
           <div className="table-container">
+            <h3>All Products</h3>
             <table className="data-table">
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>SKU</th>
                   <th>Category</th>
+                  <th>Base Price</th>
+                  <th>Sale Price</th>
+                  <th>GST</th>
+                  <th>Stock</th>
                   <th>Status</th>
-                  <th>Created At</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {products.map(p => (
-                  <tr key={p.id}>
-                    <td>{p.name}</td>
-                    <td>{p.category}</td>
-                    <td>
-                      <span className={`status-badge ${p.active ? 'active' : 'inactive'}`}>
-                        {p.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td>{p.createdAt?.toDate ? p.createdAt.toDate().toLocaleDateString() : 'N/A'}</td>
-                    <td>
-                      <button
-                        onClick={() => handleToggleProductActive(p.id, p.active)}
-                        className={`btn btn-sm ${p.active ? 'btn-danger' : 'btn-success'}`}
-                      >
-                        {p.active ? 'Deactivate' : 'Activate'}
-                      </button>
+                {products.length === 0 ? (
+                  <tr>
+                    <td colSpan="9" style={{ textAlign: 'center', padding: '40px' }}>
+                      <p>No products found. Click "Add Sample Products" to get started.</p>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  products.map(p => (
+                    <tr key={p.id}>
+                      <td>{p.name}</td>
+                      <td><code>{p.sku}</code></td>
+                      <td>{p.category}/{p.subcategory}</td>
+                      <td>₹{p.basePrice}</td>
+                      <td>{p.isOnSale ? `₹${p.salePrice}` : '-'}</td>
+                      <td>{p.gstRate}%</td>
+                      <td>
+                        {p.stockQty}
+                        {p.stockQty <= p.lowStockThreshold && (
+                          <span style={{ color: 'red', marginLeft: '5px' }}>⚠️</span>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`status-badge ${p.isActive ? 'active' : 'inactive'}`}>
+                          {p.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          onClick={() => handleToggleProductActive(p.id, p.isActive)}
+                          className={`btn btn-sm ${p.isActive ? 'btn-danger' : 'btn-success'}`}
+                        >
+                          {p.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -480,6 +797,7 @@ const OwnerDashboard = () => {
                     <th>Status</th>
                     <th>Created By</th>
                     <th>Created At</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -501,6 +819,17 @@ const OwnerDashboard = () => {
                       </td>
                       <td>{userMap[order.createdBy] || order.createdBy}</td>
                       <td>{order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString() : 'N/A'}</td>
+                      <td>
+                        {order.status === 'completed' && (
+                          <button
+                            onClick={() => handleViewBill(order)}
+                            className="btn-secondary"
+                            style={{ fontSize: '12px', padding: '4px 8px' }}
+                          >
+                            📄 View Bill
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -508,6 +837,17 @@ const OwnerDashboard = () => {
             </div>
           )}
         </div>
+      )}
+
+      {/* Bill Preview Modal */}
+      {showBill && currentBill && (
+        <BillPreview 
+          bill={currentBill} 
+          onClose={() => {
+            setShowBill(false);
+            setCurrentBill(null);
+          }} 
+        />
       )}
     </div>
   );
