@@ -43,6 +43,14 @@ service cloud.firestore {
       
       // Owners can update user roles and status
       allow update: if isOwner();
+
+      // Allow users to create their own profile (Required for registration)
+      allow create: if isAuthenticated() && 
+                       request.auth.uid == userId &&
+                       // Must be employee role (owners created manually)
+                       request.resource.data.role == 'employee' &&
+                       // Validate required fields
+                       request.resource.data.keys().hasAll(['uid', 'email', 'name', 'role', 'isActive', 'createdAt']);
       
       // No one can delete users
       allow delete: if false;
