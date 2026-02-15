@@ -52,8 +52,22 @@ const OwnerAnalyticsPro = () => {
   };
 
   const formatPercent = (value) => {
+    if (value === 0 || isNaN(value) || !isFinite(value)) {
+      return '0.0%';
+    }
     return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
   };
+
+  // Debug: Log analytics data
+  console.log('Analytics Data:', {
+    totalRevenue: analytics.totalRevenue,
+    totalOrders: analytics.totalOrders,
+    revenueGrowth: analytics.revenueGrowth,
+    ordersGrowth: analytics.ordersGrowth,
+    paymentMethodAnalysis: analytics.paymentMethodAnalysis,
+    categoryPerformance: analytics.categoryPerformance,
+    periodComparison: analytics.periodComparison
+  });
 
   // Chart colors
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
@@ -67,7 +81,7 @@ const OwnerAnalyticsPro = () => {
       if (data.payload && data.payload.category) {
         const category = String(data.payload.category || '');
         const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
-        const percentage = data.percent ? (data.percent * 100).toFixed(1) : data.payload.percent;
+        const percentage = data.percent ? (data.percent * 100).toFixed(1) : (data.payload.percent || 0).toFixed(1);
         
         return (
           <div className="custom-tooltip">
@@ -83,6 +97,26 @@ const OwnerAnalyticsPro = () => {
             </p>
             <p style={{ color: '#fff' }}>
               <strong>Avg Value:</strong> {formatCurrency(data.payload.avgValue)}
+            </p>
+          </div>
+        );
+      }
+      
+      // For payment method pie chart
+      if (data.payload && data.payload.method) {
+        const percentage = data.percent ? (data.percent * 100).toFixed(1) : (data.payload.percentage || 0).toFixed(1);
+        
+        return (
+          <div className="custom-tooltip">
+            <p className="tooltip-label">{data.payload.method}</p>
+            <p style={{ color: '#fff' }}>
+              <strong>Revenue:</strong> {formatCurrency(data.value)}
+            </p>
+            <p style={{ color: '#fff' }}>
+              <strong>Percentage:</strong> {percentage}%
+            </p>
+            <p style={{ color: '#fff' }}>
+              <strong>Transactions:</strong> {data.payload.count}
             </p>
           </div>
         );
@@ -214,7 +248,7 @@ const OwnerAnalyticsPro = () => {
               {formatPercent(analytics.revenueGrowth)}
             </span>
           </div>
-          <div className="metric-value">{formatCurrency(analytics.totalRevenue)}</div>
+          <div className="metric-value">{formatCurrency(analytics.totalRevenue || 0)}</div>
           <div className="metric-footer">vs previous period</div>
         </div>
 
@@ -225,7 +259,7 @@ const OwnerAnalyticsPro = () => {
               {formatPercent(analytics.ordersGrowth)}
             </span>
           </div>
-          <div className="metric-value">{analytics.totalOrders}</div>
+          <div className="metric-value">{analytics.totalOrders || 0}</div>
           <div className="metric-footer">vs previous period</div>
         </div>
 
@@ -236,7 +270,7 @@ const OwnerAnalyticsPro = () => {
               {formatPercent(analytics.aovGrowth)}
             </span>
           </div>
-          <div className="metric-value">{formatCurrency(analytics.avgOrderValue)}</div>
+          <div className="metric-value">{formatCurrency(analytics.avgOrderValue || 0)}</div>
           <div className="metric-footer">per transaction</div>
         </div>
 
@@ -247,10 +281,32 @@ const OwnerAnalyticsPro = () => {
               {formatPercent(analytics.itemsGrowth)}
             </span>
           </div>
-          <div className="metric-value">{analytics.totalItemsSold}</div>
+          <div className="metric-value">{analytics.totalItemsSold || 0}</div>
           <div className="metric-footer">total units</div>
         </div>
       </div>
+
+      {/* Show message if no data */}
+      {analytics.totalOrders === 0 && (
+        <div style={{ 
+          maxWidth: '1400px', 
+          margin: '0 auto 24px', 
+          padding: '0 32px' 
+        }}>
+          <div style={{
+            background: '#fef3c7',
+            border: '2px solid #fbbf24',
+            borderRadius: '12px',
+            padding: '24px',
+            textAlign: 'center'
+          }}>
+            <h3 style={{ margin: '0 0 8px 0', color: '#92400e' }}>No Data Available</h3>
+            <p style={{ margin: 0, color: '#78350f' }}>
+              There are no completed orders in the selected period. Create some sales to see analytics data.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Business Insights */}
       {analytics.insights && analytics.insights.length > 0 && (
@@ -562,6 +618,80 @@ const OwnerAnalyticsPro = () => {
               </ResponsiveContainer>
             ) : (
               <div className="chart-empty">No category data</div>
+            )}
+          </div>
+        </div>
+
+        {/* Payment Method Distribution */}
+        <div className="chart-card">
+          <div className="chart-header">
+            <div>
+              <h3>Payment Method Distribution</h3>
+              <p className="chart-subtitle">Revenue by payment mode</p>
+            </div>
+          </div>
+          <div className="chart-body chart-center">
+            {analytics.paymentMethodAnalysis && analytics.paymentMethodAnalysis.length > 0 ? (
+              <ResponsiveContainer width="100%" height={350}>
+                <PieChart>
+                  <Pie
+                    data={analytics.paymentMethodAnalysis}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={60}
+                    outerRadius={110}
+                    fill="#8884d8"
+                    paddingAngle={3}
+                    dataKey="revenue"
+                    nameKey="method"
+                    animationDuration={1500}
+                    label={({ cx, cy, midAngle, innerRadius, outerRadius, method, percent }) => {
+                      const RADIAN = Math.PI / 180;
+                      const radius = outerRadius + 25;
+                      const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                      const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                      
+                      return (
+                        <text 
+                          x={x} 
+                          y={y} 
+                          fill="#111827"
+                          textAnchor={x > cx ? 'start' : 'end'} 
+                          dominantBaseline="central"
+                          style={{ 
+                            fontSize: '13px', 
+                            fontWeight: '600',
+                            textShadow: '0 0 3px white, 0 0 3px white, 0 0 3px white'
+                          }}
+                        >
+                          {`${method} ${(percent * 100).toFixed(0)}%`}
+                        </text>
+                      );
+                    }}
+                    labelLine={{ 
+                      stroke: '#6b7280', 
+                      strokeWidth: 1.5 
+                    }}
+                  >
+                    {analytics.paymentMethodAnalysis.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={COLORS[index % COLORS.length]}
+                        stroke="#fff"
+                        strokeWidth={2}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={36}
+                    iconType="circle"
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="chart-empty">No payment data</div>
             )}
           </div>
         </div>

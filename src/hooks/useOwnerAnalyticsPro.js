@@ -25,10 +25,11 @@ export const useOwnerAnalyticsPro = (filters) => {
       setLoading(true);
       setError(null);
 
-      const [ordersSnap, productsSnap, usersSnap] = await Promise.all([
+      const [ordersSnap, productsSnap, usersSnap, billsSnap] = await Promise.all([
         getDocs(collection(db, 'orders')),
         getDocs(collection(db, 'products')),
-        getDocs(collection(db, 'users'))
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'bills'))
       ]);
 
       const orders = ordersSnap.docs.map(doc => ({
@@ -46,7 +47,12 @@ export const useOwnerAnalyticsPro = (filters) => {
         ...doc.data()
       }));
 
-      setRawData({ orders, products, users });
+      const bills = billsSnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      setRawData({ orders, products, users, bills });
     } catch (err) {
       console.error('Error fetching analytics data:', err);
       setError(err.message);
@@ -73,7 +79,7 @@ export const useOwnerAnalyticsPro = (filters) => {
 };
 
 const calculateAnalytics = (rawData, filters) => {
-  let { orders, products, users } = rawData;
+  let { orders, products, users, bills } = rawData;
 
   // Filter completed orders only
   orders = orders.filter(o => o.status === 'completed');
@@ -141,6 +147,9 @@ const calculateAnalytics = (rawData, filters) => {
     .sort((a, b) => a.stockQty - b.stockQty)
     .slice(0, 10);
 
+  // Payment method analysis - use bills data
+  const paymentMethodAnalysis = calculatePaymentMethodAnalysis(bills || [], filters);
+
   // Business insights
   const insights = generateInsights({
     revenueGrowth,
@@ -190,6 +199,7 @@ const calculateAnalytics = (rawData, filters) => {
     categoryPerformance,
     employeePerformance,
     lowStockProducts,
+    paymentMethodAnalysis,
     insights,
     periodComparison
   };
@@ -443,6 +453,71 @@ const calculateEmployeePerformance = (orders, users) => {
         avgOrder: data.orders > 0 ? data.revenue / data.orders : 0
       };
     })
+    .sort((a, b) => b.revenue - a.revenue);
+};
+
+const calculatePaymentMethodAnalysis = (bills, filters) => {
+  // Filter bills by date range if needed
+  let filteredBills = bills;
+  
+  if (filters && filters.dateRange && filters.dateRange !== 'all') {
+    const { startDate, endDate } = getDateRange(filters);
+    filteredBills = bills.filter(bill => {
+      if (!bill.createdAt) return false;
+      const date = bill.createdAt.toDate ? bill.createdAt.toDate() : new Date(bill.createdAt);
+      return date >= startDate && date <= endDate;
+    });
+  }
+
+  const paymentMethods = {
+    CASH: { revenue: 0, count: 0, percentage: 0 },
+    UPI: { revenue: 0, count: 0, percentage: 0 },
+    CARD: { revenue: 0, count: 0, percentage: 0 },
+    BANK_TRANSFER: { revenue: 0, count: 0, percentage: 0 }
+  };
+
+  let totalRevenue = 0;
+
+  filteredBills.forEach(bill => {
+    const payments = bill.payments || [];
+    
+    if (payments.length > 0) {
+      // If bill has payment records, use them
+      payments.forEach(payment => {
+        const mode = payment.mode || 'CASH';
+        const amount = payment.amount || 0;
+        
+        if (paymentMethods[mode]) {
+          paymentMethods[mode].revenue += amount;
+          paymentMethods[mode].count += 1;
+          totalRevenue += amount;
+        }
+      });
+    } else {
+      // If no payment records, assume CASH and use bill total
+      const billAmount = bill.totals?.payableAmount || 0;
+      paymentMethods.CASH.revenue += billAmount;
+      paymentMethods.CASH.count += 1;
+      totalRevenue += billAmount;
+    }
+  });
+
+  // Calculate percentages
+  Object.keys(paymentMethods).forEach(method => {
+    if (totalRevenue > 0) {
+      paymentMethods[method].percentage = (paymentMethods[method].revenue / totalRevenue) * 100;
+    }
+  });
+
+  // Convert to array format for charts, filter out zero values
+  return Object.entries(paymentMethods)
+    .filter(([_, data]) => data.revenue > 0)
+    .map(([method, data]) => ({
+      method,
+      revenue: data.revenue,
+      count: data.count,
+      percentage: data.percentage
+    }))
     .sort((a, b) => b.revenue - a.revenue);
 };
 
