@@ -13,7 +13,7 @@ import '../../styles/OwnerAnalyticsPro.css';
 const OwnerAnalyticsPro = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
-  
+
   const [filters, setFilters] = useState({
     dateRange: 'month',
     startDate: '',
@@ -22,7 +22,7 @@ const OwnerAnalyticsPro = () => {
     category: 'all',
     employee: 'all'
   });
-  
+
   const { analytics, loading, error, employees, categories } = useOwnerAnalyticsPro(filters);
 
   const handleFilterChange = (key, value) => {
@@ -76,13 +76,24 @@ const OwnerAnalyticsPro = () => {
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       const data = payload[0];
-      
+
       // For pie charts, the data structure is different
       if (data.payload && data.payload.category) {
         const category = String(data.payload.category || '');
         const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
-        const percentage = data.percent ? (data.percent * 100).toFixed(1) : (data.payload.percent || 0).toFixed(1);
-        
+
+        // Calculate percentage manually to be safe
+        let percentage = '0.0';
+        if (data.percent) {
+          percentage = (data.percent * 100).toFixed(1);
+        } else {
+          // Fallback calculation
+          const totalCategoryRevenue = analytics.categoryPerformance.reduce((sum, item) => sum + item.revenue, 0);
+          if (totalCategoryRevenue > 0) {
+            percentage = ((data.value / totalCategoryRevenue) * 100).toFixed(1);
+          }
+        }
+
         return (
           <div className="custom-tooltip">
             <p className="tooltip-label">{categoryName}</p>
@@ -101,11 +112,21 @@ const OwnerAnalyticsPro = () => {
           </div>
         );
       }
-      
+
       // For payment method pie chart
       if (data.payload && data.payload.method) {
-        const percentage = data.percent ? (data.percent * 100).toFixed(1) : (data.payload.percentage || 0).toFixed(1);
-        
+        // Calculate percentage manually to be safe
+        let percentage = '0.0';
+        if (data.percent) {
+          percentage = (data.percent * 100).toFixed(1);
+        } else {
+          // Fallback calculation for payment methods
+          const totalPaymentRevenue = analytics.paymentMethodAnalysis.reduce((sum, item) => sum + item.revenue, 0);
+          if (totalPaymentRevenue > 0) {
+            percentage = ((data.value / totalPaymentRevenue) * 100).toFixed(1);
+          }
+        }
+
         return (
           <div className="custom-tooltip">
             <p className="tooltip-label">{data.payload.method}</p>
@@ -121,18 +142,18 @@ const OwnerAnalyticsPro = () => {
           </div>
         );
       }
-      
+
       // For other charts
       return (
         <div className="custom-tooltip">
           <p className="tooltip-label">{label}</p>
           {payload.map((entry, index) => {
             const name = entry.name || entry.dataKey || '';
-            const isMoneyValue = typeof name === 'string' && 
-              (name.toLowerCase().includes('revenue') || 
-               name.toLowerCase().includes('value') || 
-               name.toLowerCase().includes('avg'));
-            
+            const isMoneyValue = typeof name === 'string' &&
+              (name.toLowerCase().includes('revenue') ||
+                name.toLowerCase().includes('value') ||
+                name.toLowerCase().includes('avg'));
+
             return (
               <p key={index} style={{ color: '#fff' }}>
                 <strong>{name}:</strong> {isMoneyValue ? formatCurrency(entry.value) : entry.value}
@@ -288,10 +309,10 @@ const OwnerAnalyticsPro = () => {
 
       {/* Show message if no data */}
       {analytics.totalOrders === 0 && (
-        <div style={{ 
-          maxWidth: '1400px', 
-          margin: '0 auto 24px', 
-          padding: '0 32px' 
+        <div style={{
+          maxWidth: '1400px',
+          margin: '0 auto 24px',
+          padding: '0 32px'
         }}>
           <div style={{
             background: '#fef3c7',
@@ -329,11 +350,11 @@ const OwnerAnalyticsPro = () => {
 
       {/* Charts Section */}
       <div className="charts-section">
-        {/* Period Comparison - Bar Chart */}
-        <div className="chart-card chart-wide">
+        {/* Revenue Comparison - Bar Chart */}
+        <div className="chart-card">
           <div className="chart-header">
             <div>
-              <h3>Period Comparison</h3>
+              <h3>Revenue Comparison</h3>
               <p className="chart-subtitle">
                 {filters.dateRange === 'today' && 'Today vs Yesterday'}
                 {filters.dateRange === 'week' && 'This Week vs Last Week'}
@@ -347,13 +368,71 @@ const OwnerAnalyticsPro = () => {
           <div className="chart-body">
             {analytics.periodComparison ? (
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart 
+                <BarChart
                   data={[
                     {
                       metric: 'Revenue',
                       Previous: analytics.periodComparison.revenue.previous,
                       Current: analytics.periodComparison.revenue.current
-                    },
+                    }
+                  ]}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis
+                    dataKey="metric"
+                    stroke="#9ca3af"
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <YAxis
+                    stroke="#9ca3af"
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend
+                    wrapperStyle={{ paddingTop: '10px' }}
+                    iconType="circle"
+                  />
+                  <Bar
+                    dataKey="Previous"
+                    fill="#9ca3af"
+                    radius={[4, 4, 0, 0]}
+                    animationDuration={1500}
+                    barSize={40}
+                  />
+                  <Bar
+                    dataKey="Current"
+                    fill="#2563eb"
+                    radius={[4, 4, 0, 0]}
+                    animationDuration={1700}
+                    barSize={40}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="chart-empty">No comparison data available</div>
+            )}
+          </div>
+        </div>
+
+        {/* Volume Comparison - Bar Chart */}
+        <div className="chart-card">
+          <div className="chart-header">
+            <div>
+              <h3>Volume Comparison</h3>
+              <p className="chart-subtitle">Orders & Items Sold</p>
+            </div>
+          </div>
+          <div className="chart-body">
+            {analytics.periodComparison ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={[
                     {
                       metric: 'Orders',
                       Previous: analytics.periodComparison.orders.previous,
@@ -368,37 +447,37 @@ const OwnerAnalyticsPro = () => {
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                  <XAxis 
-                    dataKey="metric" 
-                    stroke="#9ca3af" 
+                  <XAxis
+                    dataKey="metric"
+                    stroke="#9ca3af"
                     style={{ fontSize: '12px', fontWeight: 500 }}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
-                  <YAxis 
-                    stroke="#9ca3af" 
+                  <YAxis
+                    stroke="#9ca3af"
                     style={{ fontSize: '12px', fontWeight: 500 }}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend 
+                  <Legend
                     wrapperStyle={{ paddingTop: '10px' }}
                     iconType="circle"
                   />
-                  <Bar 
-                    dataKey="Previous" 
-                    fill="#9ca3af" 
-                    radius={[4, 4, 0, 0]} 
+                  <Bar
+                    dataKey="Previous"
+                    fill="#9ca3af"
+                    radius={[4, 4, 0, 0]}
                     animationDuration={1500}
-                    barSize={60}
+                    barSize={40}
                   />
-                  <Bar 
-                    dataKey="Current" 
-                    fill="#2563eb" 
-                    radius={[4, 4, 0, 0]} 
+                  <Bar
+                    dataKey="Current"
+                    fill="#10b981"
+                    radius={[4, 4, 0, 0]}
                     animationDuration={1700}
-                    barSize={60}
+                    barSize={40}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -422,63 +501,63 @@ const OwnerAnalyticsPro = () => {
                 <AreaChart data={analytics.revenueTrend} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="#9ca3af" 
+                  <XAxis
+                    dataKey="date"
+                    stroke="#9ca3af"
                     style={{ fontSize: '12px', fontWeight: 500 }}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
-                  <YAxis 
+                  <YAxis
                     yAxisId="left"
-                    stroke="#9ca3af" 
-                    style={{ fontSize: '12px', fontWeight: 500 }} 
-                    tickFormatter={(value) => `₹${(value/1000).toFixed(0)}k`}
+                    stroke="#9ca3af"
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
-                  <YAxis 
+                  <YAxis
                     yAxisId="right"
                     orientation="right"
-                    stroke="#9ca3af" 
+                    stroke="#9ca3af"
                     style={{ fontSize: '12px', fontWeight: 500 }}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend 
+                  <Legend
                     wrapperStyle={{ paddingTop: '20px' }}
                     iconType="circle"
                   />
-                  <Area 
+                  <Area
                     yAxisId="left"
-                    type="monotone" 
-                    dataKey="revenue" 
+                    type="monotone"
+                    dataKey="revenue"
                     name="Revenue"
-                    stroke="#2563eb" 
+                    stroke="#2563eb"
                     strokeWidth={2.5}
-                    fillOpacity={1} 
+                    fillOpacity={1}
                     fill="url(#colorRevenue)"
                     animationDuration={1500}
                     dot={false}
                   />
-                  <Area 
+                  <Area
                     yAxisId="right"
-                    type="monotone" 
-                    dataKey="orders" 
+                    type="monotone"
+                    dataKey="orders"
                     name="Orders"
-                    stroke="#10b981" 
+                    stroke="#10b981"
                     strokeWidth={2.5}
-                    fillOpacity={1} 
+                    fillOpacity={1}
                     fill="url(#colorOrders)"
                     animationDuration={1500}
                     dot={false}
@@ -502,34 +581,34 @@ const OwnerAnalyticsPro = () => {
           <div className="chart-body">
             {analytics.topProducts && analytics.topProducts.length > 0 ? (
               <ResponsiveContainer width="100%" height={350}>
-                <BarChart 
-                  data={analytics.topProducts.slice(0, 8)} 
+                <BarChart
+                  data={analytics.topProducts.slice(0, 8)}
                   layout="vertical"
                   margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                  <XAxis 
-                    type="number" 
-                    stroke="#9ca3af" 
-                    style={{ fontSize: '12px', fontWeight: 500 }} 
-                    tickFormatter={(value) => `₹${(value/1000).toFixed(0)}k`}
+                  <XAxis
+                    type="number"
+                    stroke="#9ca3af"
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
-                  <YAxis 
-                    type="category" 
-                    dataKey="name" 
-                    stroke="#9ca3af" 
-                    style={{ fontSize: '12px', fontWeight: 500 }} 
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    stroke="#9ca3af"
+                    style={{ fontSize: '12px', fontWeight: 500 }}
                     width={95}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar 
-                    dataKey="revenue" 
-                    fill="#2563eb" 
-                    radius={[0, 4, 4, 0]} 
+                  <Bar
+                    dataKey="revenue"
+                    fill="#2563eb"
+                    radius={[0, 4, 4, 0]}
                     animationDuration={1500}
                     barSize={20}
                   >
@@ -575,16 +654,16 @@ const OwnerAnalyticsPro = () => {
                       const y = cy + radius * Math.sin(-midAngle * RADIAN);
                       const catName = String(category || '');
                       const displayName = catName.charAt(0).toUpperCase() + catName.slice(1);
-                      
+
                       return (
-                        <text 
-                          x={x} 
-                          y={y} 
+                        <text
+                          x={x}
+                          y={y}
                           fill="#111827"
-                          textAnchor={x > cx ? 'start' : 'end'} 
+                          textAnchor={x > cx ? 'start' : 'end'}
                           dominantBaseline="central"
-                          style={{ 
-                            fontSize: '13px', 
+                          style={{
+                            fontSize: '13px',
                             fontWeight: '600',
                             textShadow: '0 0 3px white, 0 0 3px white, 0 0 3px white'
                           }}
@@ -593,14 +672,14 @@ const OwnerAnalyticsPro = () => {
                         </text>
                       );
                     }}
-                    labelLine={{ 
-                      stroke: '#6b7280', 
-                      strokeWidth: 1.5 
+                    labelLine={{
+                      stroke: '#6b7280',
+                      strokeWidth: 1.5
                     }}
                   >
                     {analytics.categoryPerformance.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
+                      <Cell
+                        key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
                         stroke="#fff"
                         strokeWidth={2}
@@ -608,8 +687,8 @@ const OwnerAnalyticsPro = () => {
                     ))}
                   </Pie>
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend 
-                    verticalAlign="bottom" 
+                  <Legend
+                    verticalAlign="bottom"
                     height={36}
                     formatter={(value) => value.charAt(0).toUpperCase() + value.slice(1)}
                     iconType="circle"
@@ -650,16 +729,16 @@ const OwnerAnalyticsPro = () => {
                       const radius = outerRadius + 25;
                       const x = cx + radius * Math.cos(-midAngle * RADIAN);
                       const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                      
+
                       return (
-                        <text 
-                          x={x} 
-                          y={y} 
+                        <text
+                          x={x}
+                          y={y}
                           fill="#111827"
-                          textAnchor={x > cx ? 'start' : 'end'} 
+                          textAnchor={x > cx ? 'start' : 'end'}
                           dominantBaseline="central"
-                          style={{ 
-                            fontSize: '13px', 
+                          style={{
+                            fontSize: '13px',
                             fontWeight: '600',
                             textShadow: '0 0 3px white, 0 0 3px white, 0 0 3px white'
                           }}
@@ -668,14 +747,14 @@ const OwnerAnalyticsPro = () => {
                         </text>
                       );
                     }}
-                    labelLine={{ 
-                      stroke: '#6b7280', 
-                      strokeWidth: 1.5 
+                    labelLine={{
+                      stroke: '#6b7280',
+                      strokeWidth: 1.5
                     }}
                   >
                     {analytics.paymentMethodAnalysis.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
+                      <Cell
+                        key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
                         stroke="#fff"
                         strokeWidth={2}
@@ -683,8 +762,8 @@ const OwnerAnalyticsPro = () => {
                     ))}
                   </Pie>
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend 
-                    verticalAlign="bottom" 
+                  <Legend
+                    verticalAlign="bottom"
                     height={36}
                     iconType="circle"
                   />
@@ -707,56 +786,56 @@ const OwnerAnalyticsPro = () => {
           <div className="chart-body">
             {analytics.categoryPerformance && analytics.categoryPerformance.length > 0 ? (
               <ResponsiveContainer width="100%" height={350}>
-                <BarChart 
+                <BarChart
                   data={analytics.categoryPerformance}
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                  <XAxis 
-                    dataKey="category" 
-                    stroke="#9ca3af" 
+                  <XAxis
+                    dataKey="category"
+                    stroke="#9ca3af"
                     style={{ fontSize: '12px', fontWeight: 500 }}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                     tickFormatter={(value) => value.charAt(0).toUpperCase() + value.slice(1)}
                   />
-                  <YAxis 
+                  <YAxis
                     yAxisId="left"
-                    stroke="#9ca3af" 
-                    style={{ fontSize: '12px', fontWeight: 500 }} 
-                    tickFormatter={(value) => `₹${(value/1000).toFixed(0)}k`}
+                    stroke="#9ca3af"
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
-                  <YAxis 
+                  <YAxis
                     yAxisId="right"
                     orientation="right"
-                    stroke="#9ca3af" 
-                    style={{ fontSize: '12px', fontWeight: 500 }} 
+                    stroke="#9ca3af"
+                    style={{ fontSize: '12px', fontWeight: 500 }}
                     tickFormatter={(value) => `${value}%`}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend 
+                  <Legend
                     wrapperStyle={{ paddingTop: '10px' }}
                     iconType="circle"
                   />
-                  <Bar 
+                  <Bar
                     yAxisId="left"
-                    dataKey="revenue" 
-                    name="Revenue" 
-                    fill="#2563eb" 
-                    radius={[4, 4, 0, 0]} 
+                    dataKey="revenue"
+                    name="Revenue"
+                    fill="#2563eb"
+                    radius={[4, 4, 0, 0]}
                     animationDuration={1500}
                     barSize={40}
                   />
-                  <Bar 
+                  <Bar
                     yAxisId="right"
-                    dataKey="growth" 
-                    name="Growth %" 
-                    fill="#10b981" 
-                    radius={[4, 4, 0, 0]} 
+                    dataKey="growth"
+                    name="Growth %"
+                    fill="#10b981"
+                    radius={[4, 4, 0, 0]}
                     animationDuration={1700}
                     barSize={40}
                   />
@@ -779,54 +858,54 @@ const OwnerAnalyticsPro = () => {
           <div className="chart-body">
             {analytics.employeePerformance && analytics.employeePerformance.length > 0 ? (
               <ResponsiveContainer width="100%" height={350}>
-                <BarChart 
+                <BarChart
                   data={analytics.employeePerformance}
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                  <XAxis 
-                    dataKey="name" 
-                    stroke="#9ca3af" 
+                  <XAxis
+                    dataKey="name"
+                    stroke="#9ca3af"
                     style={{ fontSize: '12px', fontWeight: 500 }}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
-                  <YAxis 
+                  <YAxis
                     yAxisId="left"
-                    stroke="#9ca3af" 
-                    style={{ fontSize: '12px', fontWeight: 500 }} 
-                    tickFormatter={(value) => `₹${(value/1000).toFixed(0)}k`}
+                    stroke="#9ca3af"
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
-                  <YAxis 
+                  <YAxis
                     yAxisId="right"
                     orientation="right"
-                    stroke="#9ca3af" 
+                    stroke="#9ca3af"
                     style={{ fontSize: '12px', fontWeight: 500 }}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend 
+                  <Legend
                     wrapperStyle={{ paddingTop: '10px' }}
                     iconType="circle"
                   />
-                  <Bar 
+                  <Bar
                     yAxisId="left"
-                    dataKey="revenue" 
-                    name="Revenue" 
-                    fill="#2563eb" 
-                    radius={[4, 4, 0, 0]} 
+                    dataKey="revenue"
+                    name="Revenue"
+                    fill="#2563eb"
+                    radius={[4, 4, 0, 0]}
                     animationDuration={1500}
                     barSize={50}
                   />
-                  <Bar 
+                  <Bar
                     yAxisId="right"
-                    dataKey="orders" 
-                    name="Orders" 
-                    fill="#8b5cf6" 
-                    radius={[4, 4, 0, 0]} 
+                    dataKey="orders"
+                    name="Orders"
+                    fill="#8b5cf6"
+                    radius={[4, 4, 0, 0]}
                     animationDuration={1700}
                     barSize={50}
                   />
@@ -849,7 +928,7 @@ const OwnerAnalyticsPro = () => {
           <div className="chart-body">
             {analytics.revenueTrend && analytics.revenueTrend.length > 0 ? (
               <ResponsiveContainer width="100%" height={350}>
-                <LineChart 
+                <LineChart
                   data={analytics.revenueTrend.map(d => ({
                     ...d,
                     aov: d.orders > 0 ? Math.round(d.revenue / d.orders) : 0
@@ -857,30 +936,30 @@ const OwnerAnalyticsPro = () => {
                   margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="#9ca3af" 
+                  <XAxis
+                    dataKey="date"
+                    stroke="#9ca3af"
                     style={{ fontSize: '12px', fontWeight: 500 }}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
-                  <YAxis 
-                    stroke="#9ca3af" 
-                    style={{ fontSize: '12px', fontWeight: 500 }} 
-                    tickFormatter={(value) => `₹${(value/1000).toFixed(1)}k`}
+                  <YAxis
+                    stroke="#9ca3af"
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                    tickFormatter={(value) => `₹${(value / 1000).toFixed(1)}k`}
                     tickLine={false}
                     axisLine={{ stroke: '#e5e7eb' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend 
+                  <Legend
                     wrapperStyle={{ paddingTop: '20px' }}
                     iconType="circle"
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="aov" 
+                  <Line
+                    type="monotone"
+                    dataKey="aov"
                     name="Avg Order Value"
-                    stroke="#f59e0b" 
+                    stroke="#f59e0b"
                     strokeWidth={3}
                     dot={{ fill: '#f59e0b', r: 5, strokeWidth: 2, stroke: '#fff' }}
                     activeDot={{ r: 7 }}

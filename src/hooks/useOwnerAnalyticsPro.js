@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { 
-  collection, 
+import {
+  collection,
   getDocs,
   query,
   where
@@ -123,10 +123,10 @@ const calculateAnalytics = (rawData, filters) => {
   const prevAov = prevOrders > 0 ? prevRevenue / prevOrders : 0;
 
   // Growth calculations
-  const revenueGrowth = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : 0;
-  const ordersGrowth = prevOrders > 0 ? ((totalOrders - prevOrders) / prevOrders) * 100 : 0;
-  const itemsGrowth = prevItems > 0 ? ((totalItemsSold - prevItems) / prevItems) * 100 : 0;
-  const aovGrowth = prevAov > 0 ? ((avgOrderValue - prevAov) / prevAov) * 100 : 0;
+  const revenueGrowth = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : (totalRevenue > 0 ? 100 : 0);
+  const ordersGrowth = prevOrders > 0 ? ((totalOrders - prevOrders) / prevOrders) * 100 : (totalOrders > 0 ? 100 : 0);
+  const itemsGrowth = prevItems > 0 ? ((totalItemsSold - prevItems) / prevItems) * 100 : (totalItemsSold > 0 ? 100 : 0);
+  const aovGrowth = prevAov > 0 ? ((avgOrderValue - prevAov) / prevAov) * 100 : (avgOrderValue > 0 ? 100 : 0);
 
   // Revenue trend
   const revenueTrend = calculateRevenueTrend(orders, filters);
@@ -310,7 +310,7 @@ const calculateRevenueTrend = (orders, filters) => {
   for (let i = 0; i < days; i++) {
     const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
     const nextDate = new Date(date.getTime() + 24 * 60 * 60 * 1000);
-    
+
     const dayOrders = orders.filter(o => {
       if (!o.createdAt) return false;
       const orderDate = o.createdAt.toDate();
@@ -459,7 +459,7 @@ const calculateEmployeePerformance = (orders, users) => {
 const calculatePaymentMethodAnalysis = (bills, filters) => {
   // Filter bills by date range if needed
   let filteredBills = bills;
-  
+
   if (filters && filters.dateRange && filters.dateRange !== 'all') {
     const { startDate, endDate } = getDateRange(filters);
     filteredBills = bills.filter(bill => {
@@ -480,13 +480,13 @@ const calculatePaymentMethodAnalysis = (bills, filters) => {
 
   filteredBills.forEach(bill => {
     const payments = bill.payments || [];
-    
+
     if (payments.length > 0) {
       // If bill has payment records, use them
       payments.forEach(payment => {
         const mode = payment.mode || 'CASH';
         const amount = payment.amount || 0;
-        
+
         if (paymentMethods[mode]) {
           paymentMethods[mode].revenue += amount;
           paymentMethods[mode].count += 1;
@@ -558,7 +558,7 @@ const generateInsights = (data) => {
     const topRevenue = topProduct.revenue;
     const totalRevenue = data.topProducts.reduce((sum, p) => sum + p.revenue, 0);
     const percentage = (topRevenue / totalRevenue) * 100;
-    
+
     if (percentage > 40) {
       insights.push({
         type: 'info',
