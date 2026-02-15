@@ -517,3 +517,29 @@ export const deductStockBatch = async (items) => {
     throw error;
   }
 };
+
+/**
+ * Delete a product (hard delete from Firestore)
+ * @param {string} productId - Product document ID
+ * @returns {Promise<void>}
+ */
+export const deleteProduct = async (productId) => {
+  try {
+    const { deleteDoc } = await import('firebase/firestore');
+    const productRef = doc(db, 'products', productId);
+    
+    // Check if product exists
+    const productDoc = await getDoc(productRef);
+    if (!productDoc.exists()) {
+      throw new Error('Product not found');
+    }
+    
+    // Delete the product
+    await deleteDoc(productRef);
+    
+    console.log('Product deleted successfully:', productId);
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    throw error;
+  }
+};
