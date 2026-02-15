@@ -91,13 +91,6 @@ export const validatePayment = (bill, paymentPayload) => {
     errors.push(`Overpayment not allowed. Due amount: ₹${currentStatus.dueAmount.toFixed(2)}`);
   }
   
-  // Validate reference ID for UPI/CARD/BANK_TRANSFER
-  if ([PAYMENT_MODES.UPI, PAYMENT_MODES.CARD, PAYMENT_MODES.BANK_TRANSFER].includes(paymentPayload.mode)) {
-    if (!paymentPayload.referenceId || paymentPayload.referenceId.trim() === '') {
-      errors.push(`Reference ID is required for ${paymentPayload.mode} payments`);
-    }
-  }
-  
   return {
     valid: errors.length === 0,
     errors

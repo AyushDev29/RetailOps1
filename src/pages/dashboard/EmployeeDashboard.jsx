@@ -326,9 +326,38 @@ const EmployeeDashboard = () => {
         console.log('⏭️ Skipping stock deduction for pre-booking');
       }
       
+      // Calculate totals for pre-bookings (even though no bill is generated)
+      let totals = null;
+      if (bill) {
+        totals = {
+          subtotal: bill.totals.subtotal,
+          totalCGST: bill.totals.totalCGST,
+          totalSGST: bill.totals.totalSGST,
+          totalTax: bill.totals.totalTax,
+          grandTotal: bill.totals.grandTotal,
+          payableAmount: bill.totals.payableAmount
+        };
+      } else if (orderType === 'prebooking') {
+        // Calculate totals for pre-booking display
+        const orderCalculation = calculateOrder({
+          items: cart,
+          employeeDiscount: 0
+        });
+        totals = {
+          subtotal: orderCalculation.summary.subtotal,
+          totalCGST: orderCalculation.summary.totalCGST,
+          totalSGST: orderCalculation.summary.totalSGST,
+          totalTax: orderCalculation.summary.totalTax,
+          grandTotal: orderCalculation.summary.grandTotal,
+          payableAmount: Math.round(orderCalculation.summary.grandTotal)
+        };
+      }
+      
       const orderData = {
         type: finalOrderType,
         customerPhone: formData.customerPhone,
+        customerName: formData.customerName,
+        customerAddress: formData.customerAddress || '',
         items: cart.map(cartItem => ({
           productId: cartItem.productId,
           productName: cartItem.name,
@@ -338,17 +367,11 @@ const EmployeeDashboard = () => {
           unitPrice: cartItem.unitSalePrice || cartItem.unitBasePrice,
           lineTotal: (cartItem.unitSalePrice || cartItem.unitBasePrice) * cartItem.quantity
         })),
-        totals: bill ? {
-          subtotal: bill.totals.subtotal,
-          totalCGST: bill.totals.totalCGST,
-          totalSGST: bill.totals.totalSGST,
-          totalTax: bill.totals.totalTax,
-          grandTotal: bill.totals.grandTotal,
-          payableAmount: bill.totals.payableAmount
-        } : null,
+        totals: totals,
         status: orderType === 'prebooking' ? 'pending' : 'completed',
         exhibitionId,
         createdBy: user.uid,
+        employeeName: userProfile?.name || user.email,
         deliveryDate: orderType === 'prebooking' ? formData.deliveryDate : null,
         billId: bill ? bill.billNumber : null
       };
@@ -368,15 +391,10 @@ const EmployeeDashboard = () => {
           // Record payment immediately (STEP 6)
           if (paymentAmount && parseFloat(paymentAmount) > 0) {
             try {
-              // Validate reference ID for digital payments
-              if (['UPI', 'CARD', 'BANK_TRANSFER'].includes(paymentMode) && !paymentReferenceId.trim()) {
-                throw new Error(`Reference ID is required for ${paymentMode} payments`);
-              }
-              
               await recordPayment(billId, {
                 mode: paymentMode,
                 amount: parseFloat(paymentAmount),
-                referenceId: paymentReferenceId.trim() || null,
+                referenceId: null, // Not tracking reference IDs
                 recordedBy: user.uid
               });
               
@@ -475,9 +493,9 @@ const EmployeeDashboard = () => {
       setError('');
       setSuccess('');
       
-      const exhibitionId = activeExhibition ? activeExhibition.id : null;
-      
-      await convertPreBookingToSale(preBookingId, exhibitionId);
+      // Pre-bookings should always convert to regular store sales (daily), not exhibition
+      // Even if there's an active exhibition
+      await convertPreBookingToSale(preBookingId, null);
       
       setSuccess('Pre-booking converted to sale successfully!');
       await loadData();
@@ -963,10 +981,7 @@ const EmployeeDashboard = () => {
                             </label>
                             <select
                               value={paymentMode}
-                              onChange={(e) => {
-                                setPaymentMode(e.target.value);
-                                setPaymentReferenceId(''); // Reset reference ID when mode changes
-                              }}
+                              onChange={(e) => setPaymentMode(e.target.value)}
                               style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
                             >
                               <option value="CASH">Cash</option>
@@ -997,21 +1012,6 @@ const EmployeeDashboard = () => {
                             </small>
                           </div>
                         </div>
-                        
-                        {['UPI', 'CARD', 'BANK_TRANSFER'].includes(paymentMode) && (
-                          <div style={{ marginBottom: '12px' }}>
-                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px', color: '#475569' }}>
-                              Reference ID / Transaction ID *
-                            </label>
-                            <input
-                              type="text"
-                              value={paymentReferenceId}
-                              onChange={(e) => setPaymentReferenceId(e.target.value)}
-                              placeholder="Enter UPI/Card/Bank reference number"
-                              style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-                            />
-                          </div>
-                        )}
                         
                         <div style={{ padding: '8px', background: '#d1fae5', borderRadius: '4px', fontSize: '11px', color: '#065f46' }}>
                           ℹ️ Payment will be recorded when order is created
@@ -1055,11 +1055,30 @@ const EmployeeDashboard = () => {
                     <div className="emp-prebooking-details">
                       <div className="emp-prebooking-row">
                         <span className="emp-prebooking-label">Product</span>
-                        <span className="emp-prebooking-value">{booking.productId}</span>
+                        <span className="emp-prebooking-value">
+                          {booking.items && booking.items.length > 0 
+                            ? booking.items.map(item => `${item.productName} (${item.quantity})`).join(', ')
+                            : 'N/A'}
+                        </span>
                       </div>
                       <div className="emp-prebooking-row">
                         <span className="emp-prebooking-label">Amount</span>
-                        <span className="emp-prebooking-value">₹{booking.price}</span>
+                        <span className="emp-prebooking-value">
+                          ₹{(() => {
+                            // Try to get from totals first
+                            if (booking.totals?.payableAmount) {
+                              return booking.totals.payableAmount;
+                            }
+                            // Fallback: calculate from items for old pre-bookings
+                            if (booking.items && booking.items.length > 0) {
+                              const total = booking.items.reduce((sum, item) => {
+                                return sum + (item.lineTotal || (item.unitPrice * item.quantity));
+                              }, 0);
+                              return Math.round(total);
+                            }
+                            return 0;
+                          })()}
+                        </span>
                       </div>
                       <div className="emp-prebooking-row">
                         <span className="emp-prebooking-label">Delivery</span>

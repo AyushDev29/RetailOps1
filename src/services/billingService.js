@@ -46,15 +46,11 @@ const generateBillNumber = () => {
 };
 
 /**
- * Get current IST timestamp
- * @returns {string} ISO timestamp in IST
+ * Get current timestamp (UTC)
+ * @returns {string} ISO timestamp
  */
-const getISTTimestamp = () => {
-  const now = new Date();
-  // Convert to IST (UTC+5:30)
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  const istTime = new Date(now.getTime() + istOffset);
-  return istTime.toISOString();
+const getCurrentTimestamp = () => {
+  return new Date().toISOString();
 };
 
 /**
@@ -111,8 +107,8 @@ export const generateBill = (orderCalculation, metadata) => {
   
   // Generate bill number and timestamp
   const billNumber = generateBillNumber();
-  const billDate = getISTTimestamp();
-  const generatedAt = getISTTimestamp();
+  const billDate = getCurrentTimestamp();
+  const generatedAt = getCurrentTimestamp();
   
   // Build line items from order calculation
   const lineItems = orderCalculation.items.map(item => ({
@@ -123,9 +119,10 @@ export const generateBill = (orderCalculation, metadata) => {
     unitPrice: item.effectiveUnitPrice,
     discountApplied: item.lineDiscountAmount || 0,
     taxableValue: item.lineTaxableValue,
-    cgstRate: item.cgstRate,
+    gstRate: item.gstRate,
+    cgstRate: item.gstRate / 2, // CGST is half of total GST
     cgstAmount: item.lineCGST,
-    sgstRate: item.sgstRate,
+    sgstRate: item.gstRate / 2, // SGST is half of total GST
     sgstAmount: item.lineSGST,
     lineTotal: item.lineTotal
   }));

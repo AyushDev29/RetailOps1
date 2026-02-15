@@ -277,117 +277,7 @@ const OwnerDashboard = () => {
     }
   };
   
-  // Handle manual stock sync for existing orders
-  const handleSyncStock = async () => {
-    const confirmMsg = 'This will deduct stock for completed orders. Note: This may deduct stock multiple times if run repeatedly. Continue?';
-    if (!window.confirm(confirmMsg)) {
-      return;
-    }
-    
-    try {
-      setError('');
-      setSuccess('');
-      setLoading(true);
-      
-      // Load orders first if not already loaded
-      console.log('📦 Loading orders for stock sync...');
-      const [ordersData, usersData, productsData] = await Promise.all([
-        getAllOrders(),
-        getAllUsers(),
-        getAllProducts()
-      ]);
-      
-      // Build product map for lookups
-      const pMap = {};
-      productsData.forEach(p => {
-        pMap[p.id] = p.name;
-      });
-      
-      // Get all completed orders
-      const completedOrders = ordersData.filter(o => o.status === 'completed');
-      
-      console.log('📦 Starting stock sync for', completedOrders.length, 'completed orders');
-      console.log('Orders data:', completedOrders);
-      
-      let totalDeducted = 0;
-      const errors = [];
-      const skipped = [];
-      const processed = [];
-      
-      for (const order of completedOrders) {
-        try {
-          console.log('🔍 Processing order:', {
-            id: order.id,
-            hasItems: !!(order.items && Array.isArray(order.items)),
-            hasProductId: !!order.productId,
-            items: order.items,
-            productId: order.productId,
-            quantity: order.quantity
-          });
-          
-          // Check if order has items array (new schema)
-          if (order.items && Array.isArray(order.items)) {
-            const stockItems = order.items.map(item => ({
-              productId: item.productId,
-              quantity: item.quantity
-            }));
-            
-            console.log('📉 Deducting stock for new schema order:', stockItems);
-            const results = await deductStockBatch(stockItems);
-            console.log('✅ Deduction results:', results);
-            totalDeducted += order.items.length;
-            processed.push(`Order ${order.id}: ${order.items.length} items`);
-          } else if (order.productId) {
-            // Old schema - single product
-            console.log('📉 Deducting stock for old schema order:', {
-              productId: order.productId,
-              quantity: order.quantity
-            });
-            
-            const results = await deductStockBatch([{
-              productId: order.productId,
-              quantity: order.quantity
-            }]);
-            console.log('✅ Deduction results:', results);
-            totalDeducted += 1;
-            processed.push(`Order ${order.id}: 1 item`);
-          } else {
-            console.warn('⚠️ Order has no productId or items:', order);
-            skipped.push(`Order ${order.id}: No product data`);
-          }
-        } catch (err) {
-          console.error('❌ Error processing order:', order.id, err);
-          errors.push(`Order ${order.id.substring(0, 8)}: ${err.message}`);
-        }
-      }
-      
-      console.log('📊 Sync Summary:', {
-        totalDeducted,
-        processed: processed.length,
-        skipped: skipped.length,
-        errors: errors.length
-      });
-      
-      let message = `Processed ${totalDeducted} items from ${processed.length} orders.`;
-      if (skipped.length > 0) {
-        message += ` Skipped ${skipped.length} orders.`;
-      }
-      
-      if (errors.length > 0) {
-        setError(`${message} Errors: ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}`);
-      } else {
-        setSuccess(message);
-      }
-      
-      // Reload products to show updated stock
-      await loadData();
-    } catch (err) {
-      console.error('❌ Stock sync failed:', err);
-      setError('Failed to sync stock: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Product management functions removed - stock is automatically deducted during order creation
 
   // Handle product export
   const handleExportProducts = () => {
@@ -676,9 +566,6 @@ const OwnerDashboard = () => {
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <button onClick={loadData} className="btn btn-primary">
                 🔄 Refresh Stock
-              </button>
-              <button onClick={handleSyncStock} className="btn btn-primary" style={{ background: '#f59e0b' }}>
-                ⚡ Sync Stock from Orders
               </button>
               <button onClick={handleDownloadTemplate} className="btn btn-secondary">
                 📥 Download Template

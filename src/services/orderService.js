@@ -205,14 +205,58 @@ export const convertPreBookingToSale = async (preBookingId, exhibitionId = null)
     
     // Import required services
     const { generateBill } = await import('./billingService');
-    const { storeBill } = await import('./billStorageService');
-    const { deductStockBatch } = await import('./productService');
+    const { saveBill } = await import('./billStorageService');
+    const { deductStockBatch, getProductById } = await import('./productService');
+    const { calculateOrder } = await import('./orderCalculationService');
+    
+    // Fetch full product details for each item to get GST rates and other required fields
+    const itemsWithProductDetails = await Promise.all(
+      orderData.items.map(async (item) => {
+        const product = await getProductById(item.productId);
+        if (!product) {
+          throw new Error(`Product not found: ${item.productId}`);
+        }
+        return {
+          productId: item.productId,
+          name: item.productName,
+          sku: product.sku,
+          category: product.category,
+          quantity: item.quantity,
+          unitBasePrice: product.basePrice,
+          unitSalePrice: product.isOnSale ? product.salePrice : null,
+          gstRate: product.gstRate,
+          isTaxInclusive: product.isTaxInclusive
+        };
+      })
+    );
+    
+    // Calculate order totals
+    const orderCalculation = calculateOrder({
+      items: itemsWithProductDetails,
+      employeeDiscount: 0
+    });
     
     // Generate bill for the order
-    const bill = await generateBill(orderData);
+    const bill = generateBill(orderCalculation, {
+      orderId: preBookingId,
+      orderType: newType,
+      employeeId: orderData.createdBy,
+      employeeName: orderData.employeeName || 'Employee',
+      exhibitionId: exhibitionId || null,
+      customer: {
+        name: orderData.customerName || 'Customer',
+        phone: orderData.customerPhone,
+        address: orderData.customerAddress || ''
+      }
+    });
     
     // Store the bill
-    const storedBill = await storeBill(bill);
+    const billId = await saveBill(bill);
+    
+    // Record payment if provided (STEP 6)
+    // Note: Payment should be collected when converting pre-booking
+    // For now, we'll mark it as UNPAID and let employee record payment after conversion
+    // Future enhancement: Add payment UI to conversion flow
     
     // Deduct stock
     if (orderData.items && Array.isArray(orderData.items)) {
@@ -235,7 +279,7 @@ export const convertPreBookingToSale = async (preBookingId, exhibitionId = null)
       type: newType,
       status: 'completed',
       exhibitionId: exhibitionId || null,
-      billId: storedBill.id,
+      billId: billId,
       convertedAt: serverTimestamp(),
       completedAt: serverTimestamp()
     });
@@ -246,8 +290,8 @@ export const convertPreBookingToSale = async (preBookingId, exhibitionId = null)
       type: newType,
       status: 'completed',
       exhibitionId,
-      billId: storedBill.id,
-      bill: storedBill
+      billId: billId,
+      bill: bill
     };
   } catch (error) {
     console.error('Error converting pre-booking:', error);

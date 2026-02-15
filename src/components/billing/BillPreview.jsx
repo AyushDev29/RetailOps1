@@ -60,15 +60,6 @@ const BillPreview = ({ bill, onClose, onPaymentRecorded }) => {
     }, 100);
   };
 
-  const handlePaymentModeChange = (e) => {
-    const mode = e.target.value;
-    setPaymentForm(prev => ({
-      ...prev,
-      mode,
-      referenceId: '' // Reset reference ID when mode changes
-    }));
-  };
-
   const handleAmountChange = (e) => {
     const value = e.target.value;
     // Allow only numbers and decimal point
@@ -93,7 +84,7 @@ const BillPreview = ({ bill, onClose, onPaymentRecorded }) => {
       const updatedBill = await recordPayment(bill.id, {
         mode: paymentForm.mode,
         amount: amount,
-        referenceId: paymentForm.referenceId.trim() || null,
+        referenceId: null, // Not tracking reference IDs
         recordedBy: user?.uid || null
       });
 
@@ -126,8 +117,6 @@ const BillPreview = ({ bill, onClose, onPaymentRecorded }) => {
       setIsRecording(false);
     }
   };
-
-  const needsReferenceId = [PAYMENT_MODES.UPI, PAYMENT_MODES.CARD, PAYMENT_MODES.BANK_TRANSFER].includes(paymentForm.mode);
 
   const formatDate = (dateValue) => {
     if (!dateValue) return 'N/A';
@@ -220,9 +209,6 @@ const BillPreview = ({ bill, onClose, onPaymentRecorded }) => {
                     <div key={index} className="payment-history-item">
                       <span className="payment-mode-badge">{payment.mode}</span>
                       <span className="payment-amount">{formatCurrency(payment.amount)}</span>
-                      {payment.referenceId && (
-                        <span className="payment-ref">Ref: {payment.referenceId}</span>
-                      )}
                       <span className="payment-time">{formatDate(payment.paidAt)}</span>
                     </div>
                   ))}
@@ -253,7 +239,7 @@ const BillPreview = ({ bill, onClose, onPaymentRecorded }) => {
                         <label>Payment Mode</label>
                         <select 
                           value={paymentForm.mode} 
-                          onChange={handlePaymentModeChange}
+                          onChange={(e) => setPaymentForm(prev => ({ ...prev, mode: e.target.value }))}
                           disabled={isRecording}
                         >
                           <option value={PAYMENT_MODES.CASH}>Cash</option>
@@ -274,19 +260,6 @@ const BillPreview = ({ bill, onClose, onPaymentRecorded }) => {
                         />
                         <small>Due: ₹{paymentSummary.dueAmount.toFixed(2)}</small>
                       </div>
-
-                      {needsReferenceId && (
-                        <div className="form-group form-group-full">
-                          <label>Reference ID / Transaction ID *</label>
-                          <input 
-                            type="text" 
-                            value={paymentForm.referenceId}
-                            onChange={(e) => setPaymentForm(prev => ({ ...prev, referenceId: e.target.value }))}
-                            placeholder="Enter UPI/Card/Bank reference number"
-                            disabled={isRecording}
-                          />
-                        </div>
-                      )}
                     </div>
 
                     <div className="payment-form-actions">
@@ -396,11 +369,11 @@ const BillPreview = ({ bill, onClose, onPaymentRecorded }) => {
                   </td>
                   <td className="col-taxable">{formatCurrency(item.taxableValue)}</td>
                   <td className="col-cgst">
-                    {item.cgstRate}%<br />
+                    {item.cgstRate !== undefined && !isNaN(item.cgstRate) ? `${item.cgstRate}%` : '2.5%'}<br />
                     {formatCurrency(item.cgstAmount)}
                   </td>
                   <td className="col-sgst">
-                    {item.sgstRate}%<br />
+                    {item.sgstRate !== undefined && !isNaN(item.sgstRate) ? `${item.sgstRate}%` : '2.5%'}<br />
                     {formatCurrency(item.sgstAmount)}
                   </td>
                   <td className="col-total">{formatCurrency(item.lineTotal)}</td>
@@ -429,10 +402,10 @@ const BillPreview = ({ bill, onClose, onPaymentRecorded }) => {
               <tbody>
                 {gstSummary.map((group, index) => (
                   <tr key={index}>
-                    <td>{group.gstRate}%</td>
+                    <td>{group.gstRate !== undefined && !isNaN(group.gstRate) ? `${group.gstRate}%` : '5%'}</td>
                     <td>{formatCurrency(group.taxableValue)}</td>
-                    <td>{group.cgstRate}% - {formatCurrency(group.cgstAmount)}</td>
-                    <td>{group.sgstRate}% - {formatCurrency(group.sgstAmount)}</td>
+                    <td>{group.cgstRate !== undefined && !isNaN(group.cgstRate) ? `${group.cgstRate}%` : '2.5%'} - {formatCurrency(group.cgstAmount)}</td>
+                    <td>{group.sgstRate !== undefined && !isNaN(group.sgstRate) ? `${group.sgstRate}%` : '2.5%'} - {formatCurrency(group.sgstAmount)}</td>
                     <td>{formatCurrency(group.totalTax)}</td>
                   </tr>
                 ))}
