@@ -59,6 +59,13 @@ const OwnerDashboard = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
 
+  // Exhibition form state
+  const [exhibitionForm, setExhibitionForm] = useState({
+    location: '',
+    startTime: ''
+  });
+  const [showExhibitionForm, setShowExhibitionForm] = useState(false);
+
   // SKU Auto-generation state
   const [isSkuManuallyEdited, setIsSkuManuallyEdited] = useState(false);
 
@@ -234,6 +241,55 @@ const OwnerDashboard = () => {
       await loadData();
     } catch (err) {
       setError('Failed to update user status: ' + err.message);
+    }
+  };
+
+  // Handle create exhibition
+  const handleCreateExhibition = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setError('');
+      setSuccess('');
+      
+      if (!exhibitionForm.location || !exhibitionForm.startTime) {
+        setError('Please fill in all exhibition fields');
+        return;
+      }
+      
+      const { startExhibition } = await import('../../services/exhibitionService');
+      await startExhibition({
+        location: exhibitionForm.location,
+        startTime: exhibitionForm.startTime,
+        createdBy: user.uid
+      });
+      
+      setSuccess('Exhibition created successfully!');
+      setExhibitionForm({ location: '', startTime: '' });
+      setShowExhibitionForm(false);
+      await loadData();
+    } catch (err) {
+      setError('Failed to create exhibition: ' + err.message);
+    }
+  };
+
+  // Handle end exhibition
+  const handleEndExhibition = async (exhibitionId) => {
+    if (!window.confirm('Are you sure you want to end this exhibition?')) {
+      return;
+    }
+    
+    try {
+      setError('');
+      setSuccess('');
+      
+      const { endExhibition } = await import('../../services/exhibitionService');
+      await endExhibition(exhibitionId);
+      
+      setSuccess('Exhibition ended successfully!');
+      await loadData();
+    } catch (err) {
+      setError('Failed to end exhibition: ' + err.message);
     }
   };
 
@@ -1069,12 +1125,120 @@ const OwnerDashboard = () => {
       {/* Exhibitions Tab */}
       {activeTab === 'exhibitions' && (
         <div className="dashboard-section">
-          <h2>Exhibitions Overview</h2>
-          <p className="info-text">Read-only view of all exhibitions</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div>
+              <h2>Exhibitions Management</h2>
+              <p className="info-text">Create and manage exhibitions for your team</p>
+            </div>
+            <button 
+              onClick={() => setShowExhibitionForm(!showExhibitionForm)} 
+              className="btn-primary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 24px',
+                fontSize: '15px',
+                fontWeight: '600',
+                background: showExhibitionForm ? '#6b7280' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none',
+                borderRadius: '8px',
+                color: 'white',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: showExhibitionForm ? '0 4px 6px rgba(0, 0, 0, 0.1)' : '0 4px 15px rgba(102, 126, 234, 0.4)',
+                transform: 'translateY(0)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = showExhibitionForm ? '0 6px 12px rgba(0, 0, 0, 0.15)' : '0 6px 20px rgba(102, 126, 234, 0.6)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = showExhibitionForm ? '0 4px 6px rgba(0, 0, 0, 0.1)' : '0 4px 15px rgba(102, 126, 234, 0.4)';
+              }}
+            >
+              {showExhibitionForm ? (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                  Cancel
+                </>
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  Create Exhibition
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Create Exhibition Form */}
+          {showExhibitionForm && (
+            <div className="form-card" style={{ marginBottom: '20px' }}>
+              <h3>Create New Exhibition</h3>
+              <form onSubmit={handleCreateExhibition} className="product-form">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Location *</label>
+                    <input
+                      type="text"
+                      value={exhibitionForm.location}
+                      onChange={(e) => setExhibitionForm({...exhibitionForm, location: e.target.value})}
+                      placeholder="e.g., Mumbai Central Mall"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Start Time *</label>
+                    <input
+                      type="datetime-local"
+                      value={exhibitionForm.startTime}
+                      onChange={(e) => setExhibitionForm({...exhibitionForm, startTime: e.target.value})}
+                      required
+                    />
+                  </div>
+                </div>
+                <button 
+                  type="submit" 
+                  className="btn-primary"
+                  style={{
+                    width: '100%',
+                    padding: '14px 24px',
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: 'white',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+                    marginTop: '8px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.6)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
+                  }}
+                >
+                  ✨ Create Exhibition
+                </button>
+              </form>
+            </div>
+          )}
 
           {exhibitions.length === 0 ? (
             <div className="empty-state">
-              <p>No exhibitions recorded yet</p>
+              <p>No exhibitions created yet</p>
             </div>
           ) : (
             <div className="table-container">
@@ -1086,26 +1250,71 @@ const OwnerDashboard = () => {
                     <th>End Time</th>
                     <th>Created By</th>
                     <th>Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {exhibitions.map(ex => (
                     <tr key={ex.id}>
                       <td>{ex.location}</td>
-                      <td>{ex.startTime}</td>
+                      <td>
+                        {ex.startTime ?
+                          new Date(ex.startTime).toLocaleString('en-IN', {
+                            timeZone: 'Asia/Kolkata',
+                            dateStyle: 'short',
+                            timeStyle: 'short'
+                          }) : 'N/A'}
+                      </td>
                       <td>
                         {ex.endTime ?
-                          new Date(ex.endTime.seconds * 1000).toLocaleString('en-IN', {
+                          (ex.endTime.toDate ? ex.endTime.toDate() : new Date(ex.endTime)).toLocaleString('en-IN', {
                             timeZone: 'Asia/Kolkata',
                             dateStyle: 'short',
                             timeStyle: 'short'
                           }) : 'Ongoing'}
                       </td>
-                      <td>{userMap[ex.createdBy] || ex.createdBy}</td>
+                      <td>{userMap[ex.createdBy] || 'Owner'}</td>
                       <td>
                         <span className={`status-badge ${ex.active ? 'active' : 'inactive'}`}>
                           {ex.active ? 'Active' : 'Closed'}
                         </span>
+                      </td>
+                      <td>
+                        {ex.active && (
+                          <button
+                            onClick={() => handleEndExhibition(ex.id)}
+                            style={{ 
+                              fontSize: '13px', 
+                              padding: '8px 16px',
+                              background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              color: 'white',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              boxShadow: '0 2px 8px rgba(245, 87, 108, 0.3)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'translateY(-1px)';
+                              e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 87, 108, 0.5)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              e.currentTarget.style.boxShadow = '0 2px 8px rgba(245, 87, 108, 0.3)';
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="15" y1="9" x2="9" y2="15"></line>
+                              <line x1="9" y1="9" x2="15" y2="15"></line>
+                            </svg>
+                            End Exhibition
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

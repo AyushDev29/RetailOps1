@@ -213,3 +213,31 @@ export const getAllExhibitions = async () => {
     throw error;
   }
 };
+
+/**
+ * Get all currently active exhibitions (for employee selection)
+ * @returns {Array} List of active exhibitions
+ */
+export const getAllActiveExhibitions = async () => {
+  try {
+    const q = query(
+      collection(db, 'exhibitions'),
+      where('active', '==', true)
+    );
+    const querySnapshot = await getDocs(q);
+    
+    // Sort in memory
+    const exhibitions = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    return exhibitions.sort((a, b) => {
+      if (!a.createdAt || !b.createdAt) return 0;
+      return b.createdAt.toMillis() - a.createdAt.toMillis();
+    });
+  } catch (error) {
+    console.error('Error fetching active exhibitions:', error);
+    throw error;
+  }
+};

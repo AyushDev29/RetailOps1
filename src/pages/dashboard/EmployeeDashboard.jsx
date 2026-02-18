@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useView } from '../../contexts/ViewContext';
 import { getActiveProducts } from '../../services/productService';
-import { getActiveExhibition, startExhibition, endExhibition } from '../../services/exhibitionService';
+import { getAllActiveExhibitions } from '../../services/exhibitionService';
 import { createOrder, getPendingPreBookings, convertPreBookingToSale } from '../../services/orderService';
 import { getCustomerByPhone, createOrUpdateCustomer } from '../../services/customerService';
 import { calculateOrder } from '../../services/orderCalculationService';
@@ -19,7 +19,8 @@ const EmployeeDashboard = () => {
   const { navigateToView, VIEWS } = useView();
   
   const [products, setProducts] = useState([]);
-  const [activeExhibition, setActiveExhibition] = useState(null);
+  const [activeExhibitions, setActiveExhibitions] = useState([]);
+  const [selectedExhibition, setSelectedExhibition] = useState('');
   const [preBookings, setPreBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -75,13 +76,6 @@ const EmployeeDashboard = () => {
     setSelectedQuantity(1);
     setError('');
   };
-  
-  const [exhibitionForm, setExhibitionForm] = useState({
-    location: '',
-    startTime: ''
-  });
-
-  const [showExhibitionForm, setShowExhibitionForm] = useState(false);
 
   // Payment recording state (STEP 6)
   const [paymentMode, setPaymentMode] = useState('CASH');
@@ -153,14 +147,14 @@ const EmployeeDashboard = () => {
       setLoading(true);
       setError('');
       
-      const [productsData, exhibitionData, preBookingsData] = await Promise.all([
+      const [productsData, exhibitionsData, preBookingsData] = await Promise.all([
         getActiveProducts(),
-        getActiveExhibition(user.uid),
+        getAllActiveExhibitions(),
         getPendingPreBookings()
       ]);
       
       setProducts(productsData);
-      setActiveExhibition(exhibitionData);
+      setActiveExhibitions(exhibitionsData);
       setPreBookings(preBookingsData);
       
       // Load bills separately to avoid blocking other data
@@ -179,48 +173,6 @@ const EmployeeDashboard = () => {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleStartExhibition = async (e) => {
-    e.preventDefault();
-    
-    try {
-      setError('');
-      setSuccess('');
-      
-      if (!exhibitionForm.location || !exhibitionForm.startTime) {
-        setError('Please fill in all exhibition fields');
-        return;
-      }
-      
-      await startExhibition({
-        location: exhibitionForm.location,
-        startTime: exhibitionForm.startTime,
-        createdBy: user.uid
-      });
-      
-      setSuccess('Exhibition started successfully!');
-      setExhibitionForm({ location: '', startTime: '' });
-      setShowExhibitionForm(false);
-      await loadData();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const handleEndExhibition = async () => {
-    if (!activeExhibition) return;
-    
-    try {
-      setError('');
-      setSuccess('');
-      
-      await endExhibition(activeExhibition.id);
-      setSuccess('Exhibition ended successfully!');
-      await loadData();
-    } catch (err) {
-      setError(err.message);
     }
   };
 
@@ -314,8 +266,8 @@ const EmployeeDashboard = () => {
         return;
       }
       
-      if (orderType === 'exhibition' && !activeExhibition) {
-        setError('Start an exhibition to create exhibition sales');
+      if (orderType === 'exhibition' && !selectedExhibition) {
+        setError('Please select an exhibition');
         return;
       }
       
@@ -335,7 +287,7 @@ const EmployeeDashboard = () => {
         exhibitionId = null;
       } else if (orderType === 'exhibition') {
         finalOrderType = 'exhibition';
-        exhibitionId = activeExhibition.id;
+        exhibitionId = selectedExhibition;
       } else if (orderType === 'prebooking') {
         finalOrderType = 'prebooking';
         exhibitionId = null;
@@ -679,91 +631,21 @@ const EmployeeDashboard = () => {
           </div>
         )}
 
-        {/* Exhibition Status Banner */}
-        <div className={`emp-exhibition-banner ${activeExhibition ? 'active' : 'inactive'}`}>
+        {/* Exhibition Selector Banner */}
+        <div className="emp-exhibition-banner">
           <div className="emp-exhibition-content">
             <div className="emp-exhibition-icon">
-              {activeExhibition ? (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                  <polyline points="9 22 9 12 15 12 15 22"/>
-                </svg>
-              ) : (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                  <circle cx="12" cy="10" r="3"/>
-                </svg>
-              )}
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+              </svg>
             </div>
             <div className="emp-exhibition-info">
-              {activeExhibition ? (
-                <>
-                  <h3>Exhibition Active</h3>
-                  <p>
-                    {activeExhibition.location} • Started {
-                      new Date(activeExhibition.startTime).toLocaleString('en-IN', {
-                        timeZone: 'Asia/Kolkata',
-                        dateStyle: 'short',
-                        timeStyle: 'short'
-                      })
-                    }
-                  </p>
-                </>
-              ) : (
-                <>
-                  <h3>No Active Exhibition</h3>
-                  <p>Start an exhibition to enable exhibition sales</p>
-                </>
-              )}
+              <h3>Active Exhibitions</h3>
+              <p>{activeExhibitions.length} exhibition{activeExhibitions.length !== 1 ? 's' : ''} available for sales</p>
             </div>
           </div>
-          <div className="emp-exhibition-actions">
-            {activeExhibition ? (
-              <button onClick={handleEndExhibition} className="emp-btn emp-btn-danger">
-                End Exhibition
-              </button>
-            ) : (
-              <button onClick={() => setShowExhibitionForm(!showExhibitionForm)} className="emp-btn emp-btn-secondary">
-                {showExhibitionForm ? 'Cancel' : 'Start Exhibition'}
-              </button>
-            )}
-          </div>
         </div>
-
-        {/* Exhibition Form (Collapsible) */}
-        {showExhibitionForm && !activeExhibition && (
-          <div className="emp-card emp-exhibition-form-card">
-            <h3 className="emp-card-title">Start New Exhibition</h3>
-            <form onSubmit={handleStartExhibition} className="emp-form">
-              <div className="emp-form-row">
-                <div className="emp-form-group">
-                  <label className="emp-label">Location</label>
-                  <input
-                    type="text"
-                    className="emp-input"
-                    value={exhibitionForm.location}
-                    onChange={(e) => setExhibitionForm({...exhibitionForm, location: e.target.value})}
-                    placeholder="e.g., Mumbai Central Mall"
-                    required
-                  />
-                </div>
-                <div className="emp-form-group">
-                  <label className="emp-label">Start Time</label>
-                  <input
-                    type="datetime-local"
-                    className="emp-input"
-                    value={exhibitionForm.startTime}
-                    onChange={(e) => setExhibitionForm({...exhibitionForm, startTime: e.target.value})}
-                    required
-                  />
-                </div>
-              </div>
-              <button type="submit" className="emp-btn emp-btn-primary">
-                Start Exhibition
-              </button>
-            </form>
-          </div>
-        )}
 
         {/* Main Content */}
         <div className="emp-main-content">
@@ -788,7 +670,7 @@ const EmployeeDashboard = () => {
                 <button
                   className={`emp-order-type ${orderType === 'exhibition' ? 'active' : ''}`}
                   onClick={() => setOrderType('exhibition')}
-                  disabled={!activeExhibition}
+                  disabled={activeExhibitions.length === 0}
                 >
                   <span className="emp-order-type-icon">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -797,7 +679,7 @@ const EmployeeDashboard = () => {
                     </svg>
                   </span>
                   <span className="emp-order-type-label">Exhibition Sale</span>
-                  {!activeExhibition && <span className="emp-order-type-badge">Requires Exhibition</span>}
+                  {activeExhibitions.length === 0 && <span className="emp-order-type-badge">No Active Exhibitions</span>}
                 </button>
                 <button
                   className={`emp-order-type ${orderType === 'prebooking' ? 'active' : ''}`}
@@ -1033,6 +915,36 @@ const EmployeeDashboard = () => {
                       </div>
                     )}
 
+                    {/* Exhibition Selector - Only for exhibition orders */}
+                    {orderType === 'exhibition' && (
+                      <div className="emp-form-group" style={{ marginTop: '16px' }}>
+                        <label className="emp-label">Select Exhibition *</label>
+                        <select
+                          className="emp-select"
+                          value={selectedExhibition}
+                          onChange={(e) => setSelectedExhibition(e.target.value)}
+                          required
+                        >
+                          <option value="">Choose an exhibition</option>
+                          {activeExhibitions.map(ex => (
+                            <option key={ex.id} value={ex.id}>
+                              {ex.location} - Started {new Date(ex.startTime).toLocaleDateString('en-IN', { 
+                                day: 'numeric',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </option>
+                          ))}
+                        </select>
+                        {activeExhibitions.length === 0 && (
+                          <span className="emp-helper" style={{ color: '#ef4444' }}>
+                            No active exhibitions. Contact owner to create one.
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {orderType === 'prebooking' && (
                       <div className="emp-form-group" style={{ marginTop: '16px' }}>
                         <label className="emp-label">Delivery Date *</label>
@@ -1116,7 +1028,7 @@ const EmployeeDashboard = () => {
                 <button 
                   type="submit" 
                   className="emp-btn emp-btn-primary emp-btn-lg emp-btn-block"
-                  disabled={cart.length === 0 || (orderType === 'exhibition' && !activeExhibition)}
+                  disabled={cart.length === 0 || (orderType === 'exhibition' && !selectedExhibition)}
                 >
                   {orderType === 'prebooking' ? 'Create Pre-Booking' : 
                    orderType === 'exhibition' ? 'Create Exhibition Sale' : 

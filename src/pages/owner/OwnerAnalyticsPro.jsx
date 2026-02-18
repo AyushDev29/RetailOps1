@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useView } from '../../contexts/ViewContext';
 import { useOwnerAnalyticsPro } from '../../hooks/useOwnerAnalyticsPro';
@@ -997,6 +997,307 @@ const OwnerAnalyticsPro = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Exhibitions Timeline Section */}
+        <ExhibitionsTimeline />
+      </div>
+    </div>
+  );
+};
+
+// Exhibitions Timeline Component
+const ExhibitionsTimeline = () => {
+  const [exhibitions, setExhibitions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadExhibitions();
+  }, []);
+
+  const loadExhibitions = async () => {
+    try {
+      const { getAllExhibitions } = await import('../../services/exhibitionService');
+      const { getAllOrders } = await import('../../services/orderService');
+      
+      const [exhibitionsData, ordersData] = await Promise.all([
+        getAllExhibitions(),
+        getAllOrders()
+      ]);
+      
+      console.log('Owner - All orders:', ordersData);
+      console.log('Owner - All exhibitions:', exhibitionsData);
+      
+      // Filter for this month
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      
+      const thisMonthExhibitions = exhibitionsData.filter(ex => {
+        const createdAt = ex.createdAt?.toDate ? ex.createdAt.toDate() : new Date(ex.createdAt);
+        return createdAt >= startOfMonth && createdAt <= endOfMonth;
+      });
+      
+      console.log('Owner - This month exhibitions:', thisMonthExhibitions);
+      
+      // Calculate sales for each exhibition
+      const exhibitionsWithSales = thisMonthExhibitions.map(ex => {
+        const exhibitionOrders = ordersData.filter(order => {
+          const matchesExhibition = order.exhibitionId === ex.id;
+          const isCompleted = order.status === 'completed';
+          
+          console.log(`Owner - Order ${order.id}:`, {
+            exhibitionId: order.exhibitionId,
+            targetExhibitionId: ex.id,
+            matchesExhibition,
+            status: order.status,
+            isCompleted,
+            type: order.type,
+            willInclude: matchesExhibition && isCompleted
+          });
+          
+          return matchesExhibition && isCompleted;
+        });
+        
+        console.log(`Owner - Exhibition ${ex.location} (${ex.id}):`, {
+          totalOrders: exhibitionOrders.length,
+          orders: exhibitionOrders
+        });
+        
+        const totalSales = exhibitionOrders.reduce((sum, order) => {
+          return sum + (order.totals?.payableAmount || 0);
+        }, 0);
+        
+        return {
+          ...ex,
+          salesCount: exhibitionOrders.length,
+          totalRevenue: totalSales
+        };
+      });
+      
+      console.log('Owner - Exhibitions with sales:', exhibitionsWithSales);
+      setExhibitions(exhibitionsWithSales);
+    } catch (err) {
+      console.error('Error loading exhibitions:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="chart-card chart-wide">
+        <div className="chart-header">
+          <h3>This Month's Exhibitions</h3>
+        </div>
+        <div className="chart-body">
+          <div className="chart-empty">Loading exhibitions...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="chart-card chart-wide">
+      <div className="chart-header">
+        <div>
+          <h3>This Month's Exhibitions</h3>
+          <p className="chart-subtitle">All exhibitions - active and completed</p>
+        </div>
+      </div>
+      <div className="chart-body">
+        {exhibitions.length === 0 ? (
+          <div className="chart-empty">No exhibitions this month</div>
+        ) : (
+          <div style={{ padding: '20px' }}>
+            {exhibitions.map((ex) => {
+              // Properly handle Firestore timestamps
+              const startDate = ex.startTime?.toDate 
+                ? ex.startTime.toDate() 
+                : (ex.startTime ? new Date(ex.startTime) : (ex.createdAt?.toDate ? ex.createdAt.toDate() : new Date()));
+              const endDate = ex.endTime?.toDate ? ex.endTime.toDate() : null;
+              const isOngoing = ex.active;
+              
+              return (
+                <div 
+                  key={ex.id} 
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '16px',
+                    marginBottom: '12px',
+                    background: isOngoing ? '#dbeafe' : '#f3f4f6',
+                    borderRadius: '8px',
+                    border: `2px solid ${isOngoing ? '#3b82f6' : '#9ca3af'}`,
+                    position: 'relative'
+                  }}
+                >
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    background: isOngoing ? '#10b981' : '#6b7280',
+                    marginRight: '16px',
+                    flexShrink: 0,
+                    boxShadow: isOngoing ? '0 0 0 4px rgba(16, 185, 129, 0.2)' : 'none'
+                  }} />
+                  
+                  <div style={{ flex: 1 }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '12px',
+                      marginBottom: '8px',
+                      flexWrap: 'wrap'
+                    }}>
+                      <h4 style={{ 
+                        margin: 0, 
+                        fontSize: '16px', 
+                        fontWeight: '600',
+                        color: '#111827'
+                      }}>
+                        {ex.location}
+                      </h4>
+                      <span style={{
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        background: isOngoing ? '#10b981' : '#6b7280',
+                        color: 'white',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        {isOngoing ? '🟢 Ongoing' : '✓ Completed'}
+                      </span>
+                    </div>
+                    
+                    <div style={{ 
+                      display: 'flex', 
+                      gap: '24px',
+                      fontSize: '13px',
+                      color: '#6b7280',
+                      flexWrap: 'wrap'
+                    }}>
+                      <div>
+                        <span style={{ fontWeight: '500' }}>Started:</span>{' '}
+                        {startDate.toLocaleDateString('en-IN', { 
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </div>
+                      {endDate && (
+                        <div>
+                          <span style={{ fontWeight: '500' }}>Ended:</span>{' '}
+                          {endDate.toLocaleDateString('en-IN', { 
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      )}
+                      {!endDate && isOngoing && (
+                        <div style={{ color: '#10b981', fontWeight: '500' }}>
+                          ⏱️ In Progress
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                    <div style={{
+                      padding: '8px 16px',
+                      background: 'white',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: '#111827',
+                      border: '1px solid #e5e7eb',
+                      textAlign: 'center'
+                    }}>
+                      {(() => {
+                        if (isOngoing) {
+                          const duration = Math.floor((new Date() - startDate) / (1000 * 60 * 60));
+                          return `${duration}h running`;
+                        } else if (endDate) {
+                          const duration = Math.floor((endDate - startDate) / (1000 * 60 * 60));
+                          return `${duration}h duration`;
+                        }
+                        return 'N/A';
+                      })()}
+                    </div>
+                    
+                    <div style={{
+                      padding: '8px 16px',
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: 'white',
+                      textAlign: 'center',
+                      boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)'
+                    }}>
+                      {ex.salesCount || 0} sales
+                    </div>
+                    
+                    <div style={{
+                      padding: '8px 16px',
+                      background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: 'white',
+                      textAlign: 'center',
+                      boxShadow: '0 2px 8px rgba(245, 87, 108, 0.3)'
+                    }}>
+                      ₹{(ex.totalRevenue || 0).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '12px',
+              marginTop: '20px',
+              padding: '16px',
+              background: '#f9fafb',
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827' }}>
+                  {exhibitions.length}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                  Total This Month
+                </div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>
+                  {exhibitions.filter(ex => ex.active).length}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                  Ongoing
+                </div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#6b7280' }}>
+                  {exhibitions.filter(ex => !ex.active).length}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                  Completed
+                </div>
               </div>
             </div>
           </div>

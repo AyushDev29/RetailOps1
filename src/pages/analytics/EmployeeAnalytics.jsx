@@ -3,7 +3,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { useView } from '../../contexts/ViewContext';
 import { useAnalytics } from '../../hooks/useAnalytics';
 import { getExhibitionsForFilter } from '../../services/analyticsService';
-import { getAllExhibitions } from '../../services/exhibitionService';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -95,20 +94,69 @@ const EmployeeAnalytics = () => {
   
   const loadMyExhibitions = async () => {
     try {
-      // Get ALL exhibitions (not just current user's)
-      const data = await getAllExhibitions();
+      const { getAllExhibitions } = await import('../../services/exhibitionService');
+      const { getAllOrders } = await import('../../services/orderService');
+      
+      const [exhibitionsData, ordersData] = await Promise.all([
+        getAllExhibitions(),
+        getAllOrders()
+      ]);
+      
+      console.log('All orders:', ordersData);
+      console.log('All exhibitions:', exhibitionsData);
       
       // Filter for this month only
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
       
-      const thisMonthExhibitions = data.filter(ex => {
+      const thisMonthExhibitions = exhibitionsData.filter(ex => {
         const createdAt = ex.createdAt?.toDate ? ex.createdAt.toDate() : new Date(ex.createdAt);
         return createdAt >= startOfMonth && createdAt <= endOfMonth;
       });
       
-      setMyExhibitions(thisMonthExhibitions);
+      console.log('This month exhibitions:', thisMonthExhibitions);
+      
+      // Calculate sales for each exhibition
+      const exhibitionsWithSales = thisMonthExhibitions.map(ex => {
+        // Filter orders for this exhibition
+        const exhibitionOrders = ordersData.filter(order => {
+          const matchesExhibition = order.exhibitionId === ex.id;
+          const isCompleted = order.status === 'completed';
+          const isExhibitionType = order.type === 'exhibition';
+          
+          console.log(`Order ${order.id}:`, {
+            exhibitionId: order.exhibitionId,
+            targetExhibitionId: ex.id,
+            matchesExhibition,
+            status: order.status,
+            isCompleted,
+            type: order.type,
+            isExhibitionType,
+            willInclude: matchesExhibition && isCompleted
+          });
+          
+          return matchesExhibition && isCompleted;
+        });
+        
+        console.log(`Exhibition ${ex.location} (${ex.id}):`, {
+          totalOrders: exhibitionOrders.length,
+          orders: exhibitionOrders
+        });
+        
+        const totalSales = exhibitionOrders.reduce((sum, order) => {
+          return sum + (order.totals?.payableAmount || 0);
+        }, 0);
+        
+        return {
+          ...ex,
+          salesCount: exhibitionOrders.length,
+          totalRevenue: totalSales
+        };
+      });
+      
+      console.log('Exhibitions with sales:', exhibitionsWithSales);
+      setMyExhibitions(exhibitionsWithSales);
     } catch (err) {
       console.error('Error loading exhibitions:', err);
     }
@@ -540,65 +588,12 @@ const EmployeeAnalytics = () => {
           </div>
         </div>
         
-        {/* Exhibition Sales Chart */}
-        <div className="chart-card chart-wide">
-          <div className="chart-header">
-            <div>
-              <h3>Sales by Exhibition</h3>
-              <p className="chart-subtitle">Exhibition performance</p>
-            </div>
-          </div>
-          <div className="chart-body">
-            {analytics.exhibitionSalesComparison.length === 0 ? (
-              <div className="chart-empty">No exhibition sales for selected period</div>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart 
-                  data={analytics.exhibitionSalesComparison.map(ex => ({
-                    exhibition: exhibitionMap[ex.exhibitionId] || 'Unknown',
-                    sales: ex.count
-                  }))}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                  <XAxis 
-                    dataKey="exhibition" 
-                    stroke="#9ca3af" 
-                    style={{ fontSize: '12px', fontWeight: 500 }}
-                    tickLine={false}
-                    axisLine={{ stroke: '#e5e7eb' }}
-                  />
-                  <YAxis 
-                    stroke="#9ca3af" 
-                    style={{ fontSize: '12px', fontWeight: 500 }}
-                    tickLine={false}
-                    axisLine={{ stroke: '#e5e7eb' }}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar 
-                    dataKey="sales" 
-                    name="Sales"
-                    fill="#f59e0b" 
-                    radius={[4, 4, 0, 0]} 
-                    animationDuration={1500}
-                    barSize={60}
-                  >
-                    {analytics.exhibitionSalesComparison.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-        
         {/* This Month's Exhibitions Timeline */}
         <div className="chart-card chart-wide">
           <div className="chart-header">
             <div>
               <h3>This Month's Exhibitions</h3>
-              <p className="chart-subtitle">All exhibitions by all employees</p>
+              <p className="chart-subtitle">All exhibitions - active and completed</p>
             </div>
           </div>
           <div className="chart-body">
@@ -606,11 +601,13 @@ const EmployeeAnalytics = () => {
               <div className="chart-empty">No exhibitions this month</div>
             ) : (
               <div style={{ padding: '20px' }}>
-                {myExhibitions.map((ex, index) => {
-                  const startDate = ex.startTime ? new Date(ex.startTime) : (ex.createdAt?.toDate ? ex.createdAt.toDate() : new Date());
+                {myExhibitions.map((ex) => {
+                  // Properly handle Firestore timestamps
+                  const startDate = ex.startTime?.toDate 
+                    ? ex.startTime.toDate() 
+                    : (ex.startTime ? new Date(ex.startTime) : (ex.createdAt?.toDate ? ex.createdAt.toDate() : new Date()));
                   const endDate = ex.endTime?.toDate ? ex.endTime.toDate() : null;
                   const isOngoing = ex.active;
-                  const isMyExhibition = ex.createdBy === user.uid;
                   
                   return (
                     <div 
@@ -666,16 +663,6 @@ const EmployeeAnalytics = () => {
                           }}>
                             {isOngoing ? '🟢 Ongoing' : '✓ Completed'}
                           </span>
-                          <span style={{
-                            padding: '4px 12px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: '600',
-                            background: isMyExhibition ? '#8b5cf6' : '#64748b',
-                            color: 'white'
-                          }}>
-                            {isMyExhibition ? '👤 You' : '👥 Colleague'}
-                          </span>
                         </div>
                         
                         <div style={{ 
@@ -715,26 +702,44 @@ const EmployeeAnalytics = () => {
                         </div>
                       </div>
                       
-                      {/* Duration Badge */}
-                      <div style={{
-                        padding: '8px 16px',
-                        background: 'white',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        color: '#111827',
-                        border: '1px solid #e5e7eb'
-                      }}>
-                        {(() => {
-                          if (isOngoing) {
-                            const duration = Math.floor((new Date() - startDate) / (1000 * 60 * 60));
-                            return `${duration}h running`;
-                          } else if (endDate) {
-                            const duration = Math.floor((endDate - startDate) / (1000 * 60 * 60));
-                            return `${duration}h duration`;
-                          }
-                          return 'N/A';
-                        })()}
+                      {/* Stats Badges */}
+                      <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                        {/* Duration Badge */}
+                        <div style={{
+                          padding: '8px 16px',
+                          background: 'white',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          color: '#111827',
+                          border: '1px solid #e5e7eb',
+                          textAlign: 'center'
+                        }}>
+                          {(() => {
+                            if (isOngoing) {
+                              const duration = Math.floor((new Date() - startDate) / (1000 * 60 * 60));
+                              return `${duration}h running`;
+                            } else if (endDate) {
+                              const duration = Math.floor((endDate - startDate) / (1000 * 60 * 60));
+                              return `${duration}h duration`;
+                            }
+                            return 'N/A';
+                          })()}
+                        </div>
+                        
+                        {/* Sales Badge */}
+                        <div style={{
+                          padding: '8px 16px',
+                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          color: 'white',
+                          textAlign: 'center',
+                          boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)'
+                        }}>
+                          {ex.salesCount || 0} sales
+                        </div>
                       </div>
                     </div>
                   );
