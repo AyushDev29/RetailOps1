@@ -50,24 +50,56 @@ export const saveBill = async (bill) => {
  * @param {string} employeeId - Employee user ID
  * @returns {Promise<Array>} List of today's bills
  */
-export const getTodaysBills = async (employeeId) => {
+/**
+ * Get today's bills
+ * @param {string} employeeId - Employee user ID (optional for owner)
+ * @param {boolean} isOwner - Whether the user is owner
+ * @returns {Promise<Array>} List of today's bills
+ */
+export const getTodaysBills = async (employeeId = null, isOwner = false) => {
   try {
-    // Get today's date in IST timezone
+    // Get current time in IST
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
     const istNow = new Date(now.getTime() + istOffset);
     
-    // Set to start of day in IST
-    const todayIST = new Date(istNow.getFullYear(), istNow.getMonth(), istNow.getDate());
-    const todayMillis = todayIST.getTime() - istOffset; // Convert back to UTC for comparison
+    // Get start of today in IST (00:00:00)
+    const todayStartIST = new Date(Date.UTC(
+      istNow.getUTCFullYear(),
+      istNow.getUTCMonth(),
+      istNow.getUTCDate(),
+      0, 0, 0, 0
+    ));
     
-    // Simple query with only employeeId filter (no composite index needed)
-    const q = query(
-      collection(db, 'bills'),
-      where('employeeId', '==', employeeId)
-    );
+    // Get end of today in IST (23:59:59.999)
+    const todayEndIST = new Date(Date.UTC(
+      istNow.getUTCFullYear(),
+      istNow.getUTCMonth(),
+      istNow.getUTCDate(),
+      23, 59, 59, 999
+    ));
     
-    const querySnapshot = await getDocs(q);
+    // Convert IST times to UTC timestamps for Firestore comparison
+    const todayStartUTC = todayStartIST.getTime() - istOffset;
+    const todayEndUTC = todayEndIST.getTime() - istOffset;
+    
+    console.log('🕐 Current IST time:', istNow.toISOString());
+    console.log('📅 Today start (IST):', todayStartIST.toISOString(), '→ UTC:', new Date(todayStartUTC).toISOString());
+    console.log('📅 Today end (IST):', todayEndIST.toISOString(), '→ UTC:', new Date(todayEndUTC).toISOString());
+    
+    let querySnapshot;
+    
+    if (isOwner) {
+      // Owner sees ALL bills
+      querySnapshot = await getDocs(collection(db, 'bills'));
+    } else {
+      // Employee sees only their own bills
+      const q = query(
+        collection(db, 'bills'),
+        where('employeeId', '==', employeeId)
+      );
+      querySnapshot = await getDocs(q);
+    }
     
     // Filter by date and sort in memory
     const bills = querySnapshot.docs
@@ -76,9 +108,15 @@ export const getTodaysBills = async (employeeId) => {
         ...doc.data()
       }))
       .filter(bill => {
-        // Filter for today's bills (in IST)
+        // Filter for today's bills (in IST timezone)
         const billTime = bill.createdAt?.toMillis() || 0;
-        return billTime >= todayMillis;
+        const isToday = billTime >= todayStartUTC && billTime <= todayEndUTC;
+        
+        if (billTime > 0) {
+          console.log(`  Bill ${bill.billNumber}: ${new Date(billTime).toISOString()} → isToday: ${isToday}`);
+        }
+        
+        return isToday;
       })
       .sort((a, b) => {
         // Sort by createdAt descending (newest first)
@@ -86,6 +124,8 @@ export const getTodaysBills = async (employeeId) => {
         const bTime = b.createdAt?.toMillis() || 0;
         return bTime - aTime;
       });
+    
+    console.log('✅ Today\'s bills count:', bills.length);
     
     return bills;
   } catch (error) {

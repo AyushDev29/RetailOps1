@@ -145,26 +145,40 @@ export const getOrdersByEmployee = async (employeeId) => {
 
 /**
  * Get pending pre-bookings
+ * @param {string} employeeId - Employee user ID (optional for owner)
+ * @param {boolean} isOwner - Whether the user is owner
  * @returns {Array} List of pending pre-booking orders
  */
-export const getPendingPreBookings = async () => {
+export const getPendingPreBookings = async (employeeId = null, isOwner = false) => {
   try {
-    const q = query(
-      collection(db, 'orders'),
-      where('type', '==', 'prebooking'),
-      where('status', '==', 'pending')
-      // Note: orderBy removed to avoid index requirement
-      // Results will be in document creation order
-    );
+    let q;
+    
+    if (isOwner) {
+      // Owner sees ALL pre-bookings
+      q = query(
+        collection(db, 'orders'),
+        where('type', '==', 'prebooking'),
+        where('status', '==', 'pending')
+      );
+    } else {
+      // Employee sees only their own pre-bookings
+      q = query(
+        collection(db, 'orders'),
+        where('type', '==', 'prebooking'),
+        where('status', '==', 'pending'),
+        where('createdBy', '==', employeeId)
+      );
+    }
+    
     const querySnapshot = await getDocs(q);
     
-    // Sort in memory instead
+    // Sort in memory by creation date
     const orders = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
     
-    // Sort by createdAt if it exists
+    // Sort by createdAt if it exists (newest first)
     return orders.sort((a, b) => {
       if (!a.createdAt || !b.createdAt) return 0;
       return b.createdAt.toMillis() - a.createdAt.toMillis();

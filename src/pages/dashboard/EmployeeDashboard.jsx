@@ -142,10 +142,20 @@ const EmployeeDashboard = () => {
       setLoading(true);
       setError('');
       
+      // Ensure user is authenticated before fetching
+      if (!user || !user.uid) {
+        console.warn('User not authenticated, skipping data load');
+        setLoading(false);
+        return;
+      }
+      
+      // Check if user is owner
+      const isOwner = userProfile?.role === 'owner';
+      
       const [productsData, exhibitionsData, preBookingsData] = await Promise.all([
         getActiveProducts(),
         getAllActiveExhibitions(),
-        getPendingPreBookings()
+        getPendingPreBookings(user.uid, isOwner)
       ]);
       
       setProducts(productsData);
@@ -154,7 +164,7 @@ const EmployeeDashboard = () => {
       
       // Load bills separately to avoid blocking other data
       try {
-        const billsData = await getTodaysBills(user.uid);
+        const billsData = await getTodaysBills(user.uid, isOwner);
         setTodaysBills(billsData);
       } catch (billError) {
         console.error('Error loading bills:', billError);

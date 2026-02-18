@@ -20,7 +20,8 @@ const EmployeeAnalytics = () => {
     gender: '', // '' | 'Male' | 'Female' | 'Other'
     ageGroup: '', // '' | '18-25' | '26-35' | '36-45' | '45+'
     exhibitionId: '',
-    employeeId: user?.uid || ''
+    employeeId: user?.uid || '',
+    isOwner: userProfile?.role === 'owner'
   });
   
   const [exhibitions, setExhibitions] = useState([]);
@@ -94,12 +95,20 @@ const EmployeeAnalytics = () => {
   
   const loadMyExhibitions = async () => {
     try {
+      // Ensure user is authenticated
+      if (!user || !user.uid) {
+        console.warn('User not authenticated, skipping exhibitions load');
+        return;
+      }
+      
       const { getAllExhibitions } = await import('../../services/exhibitionService');
-      const { getAllOrders } = await import('../../services/orderService');
+      const { getAllOrders, getOrdersByEmployee } = await import('../../services/orderService');
+      
+      const isOwner = userProfile?.role === 'owner';
       
       const [exhibitionsData, ordersData] = await Promise.all([
         getAllExhibitions(),
-        getAllOrders()
+        isOwner ? getAllOrders() : getOrdersByEmployee(user.uid)
       ]);
       
       console.log('All orders:', ordersData);

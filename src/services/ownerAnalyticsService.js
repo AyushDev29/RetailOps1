@@ -112,6 +112,97 @@ export const getRevenueSummary = (orders) => {
 };
 
 /**
+ * Get daily revenue and volume comparison (today vs yesterday, IST)
+ * @param {Array} orders - Orders with price data
+ * @returns {Object} Daily comparison with revenue and volume
+ */
+export const getDailyComparison = (orders) => {
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+  const istNow = new Date(now.getTime() + istOffset);
+  
+  // Today in IST
+  const todayStartIST = new Date(Date.UTC(
+    istNow.getUTCFullYear(),
+    istNow.getUTCMonth(),
+    istNow.getUTCDate(),
+    0, 0, 0, 0
+  ));
+  const todayStartUTC = new Date(todayStartIST.getTime() - istOffset);
+  
+  const todayEndIST = new Date(Date.UTC(
+    istNow.getUTCFullYear(),
+    istNow.getUTCMonth(),
+    istNow.getUTCDate(),
+    23, 59, 59, 999
+  ));
+  const todayEndUTC = new Date(todayEndIST.getTime() - istOffset);
+  
+  // Yesterday in IST
+  const yesterdayIST = new Date(istNow.getTime() - (24 * 60 * 60 * 1000));
+  const yesterdayStartIST = new Date(Date.UTC(
+    yesterdayIST.getUTCFullYear(),
+    yesterdayIST.getUTCMonth(),
+    yesterdayIST.getUTCDate(),
+    0, 0, 0, 0
+  ));
+  const yesterdayStartUTC = new Date(yesterdayStartIST.getTime() - istOffset);
+  
+  const yesterdayEndIST = new Date(Date.UTC(
+    yesterdayIST.getUTCFullYear(),
+    yesterdayIST.getUTCMonth(),
+    yesterdayIST.getUTCDate(),
+    23, 59, 59, 999
+  ));
+  const yesterdayEndUTC = new Date(yesterdayEndIST.getTime() - istOffset);
+
+  // Filter today's orders
+  const todayOrders = orders.filter(order => {
+    if (!order.createdAt) return false;
+    const orderDate = order.createdAt.toDate();
+    return orderDate >= todayStartUTC && orderDate <= todayEndUTC;
+  });
+
+  // Filter yesterday's orders
+  const yesterdayOrders = orders.filter(order => {
+    if (!order.createdAt) return false;
+    const orderDate = order.createdAt.toDate();
+    return orderDate >= yesterdayStartUTC && orderDate <= yesterdayEndUTC;
+  });
+
+  const todayRevenue = todayOrders.reduce((sum, order) => sum + (order.revenue || 0), 0);
+  const yesterdayRevenue = yesterdayOrders.reduce((sum, order) => sum + (order.revenue || 0), 0);
+
+  // Calculate total items sold
+  const todayItems = todayOrders.reduce((sum, order) => {
+    if (order.items && Array.isArray(order.items)) {
+      return sum + order.items.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0);
+    }
+    return sum + (order.quantity || 0);
+  }, 0);
+
+  const yesterdayItems = yesterdayOrders.reduce((sum, order) => {
+    if (order.items && Array.isArray(order.items)) {
+      return sum + order.items.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0);
+    }
+    return sum + (order.quantity || 0);
+  }, 0);
+
+  return {
+    revenue: {
+      current: todayRevenue,
+      previous: yesterdayRevenue
+    },
+    volume: {
+      currentOrders: todayOrders.length,
+      previousOrders: yesterdayOrders.length,
+      currentItems: todayItems,
+      previousItems: yesterdayItems
+    }
+  };
+};
+
+/**
  * Get monthly revenue comparison (current vs previous month, IST)
  * @param {Array} orders - Orders with price data
  * @returns {Object} Monthly comparison

@@ -108,7 +108,12 @@ function Login() {
         <div className="auth-form-panel">
           <div className="auth-form-container">
             <div className="auth-logged-in-state">
-              <div className="auth-logged-in-icon">✓</div>
+              <div className="auth-logged-in-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                  <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+              </div>
               <h2 className="auth-logged-in-title">You're already signed in</h2>
               <p className="auth-logged-in-text">
                 Signed in as <strong>{userProfile.name}</strong> ({userProfile.role})
@@ -155,15 +160,27 @@ function Login() {
 
           <div className="auth-brand-features">
             <div className="auth-feature-item">
-              <div className="auth-feature-icon">✓</div>
+              <div className="auth-feature-icon">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
               <span>Real-time sales tracking</span>
             </div>
             <div className="auth-feature-item">
-              <div className="auth-feature-icon">✓</div>
+              <div className="auth-feature-icon">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
               <span>Exhibition management</span>
             </div>
             <div className="auth-feature-item">
-              <div className="auth-feature-icon">✓</div>
+              <div className="auth-feature-icon">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
               <span>Analytics & insights</span>
             </div>
           </div>
@@ -237,15 +254,8 @@ function Login() {
           </form>
 
           <div className="auth-form-footer">
-            <p className="auth-form-footer-text">
-              Don't have an account?{' '}
-              <button 
-                className="auth-form-link" 
-                onClick={() => navigateToView(VIEWS.REGISTER)}
-                disabled={isLoading}
-              >
-                Create account
-              </button>
+            <p className="auth-form-footer-text" style={{ textAlign: 'center', color: 'var(--color-slate-500)' }}>
+              Contact your administrator for account access
             </p>
           </div>
         </div>

@@ -10,15 +10,29 @@ import { db } from './firebase';
  * Get orders for analytics (NO PRICE/REVENUE FIELDS)
  * Includes: daily, exhibition, and converted pre-bookings only
  * Excludes: pending pre-bookings
- * @param {Object} filters - { startDate, endDate, gender, ageGroup, exhibitionId, employeeId }
+ * @param {Object} filters - { startDate, endDate, gender, ageGroup, exhibitionId, employeeId, isOwner }
  * @returns {Array} Orders with customerPhone, type, status, createdAt, createdBy, exhibitionId
  */
 export const getOrdersForAnalytics = async (filters = {}) => {
   try {
-    const { startDate, endDate, gender, ageGroup, exhibitionId, employeeId } = filters;
+    const { startDate, endDate, gender, ageGroup, exhibitionId, employeeId, isOwner } = filters;
     
-    // Fetch all orders (no compound queries to avoid index requirements)
-    const querySnapshot = await getDocs(collection(db, 'orders'));
+    let querySnapshot;
+    
+    if (isOwner) {
+      // Owner sees ALL orders
+      querySnapshot = await getDocs(collection(db, 'orders'));
+    } else if (employeeId) {
+      // Employee sees only their own orders
+      const q = query(
+        collection(db, 'orders'),
+        where('createdBy', '==', employeeId)
+      );
+      querySnapshot = await getDocs(q);
+    } else {
+      // Fallback: fetch all (for backward compatibility)
+      querySnapshot = await getDocs(collection(db, 'orders'));
+    }
     
     let orders = querySnapshot.docs.map(doc => {
       const data = doc.data();
@@ -53,11 +67,6 @@ export const getOrdersForAnalytics = async (filters = {}) => {
       
       // Filter by exhibition
       if (exhibitionId && order.exhibitionId !== exhibitionId) {
-        return false;
-      }
-      
-      // Filter by employee
-      if (employeeId && order.createdBy !== employeeId) {
         return false;
       }
       

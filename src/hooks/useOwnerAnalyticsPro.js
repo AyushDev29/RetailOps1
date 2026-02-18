@@ -257,11 +257,28 @@ const applyFilters = (orders, filters, products) => {
 
 const getDateRange = (filters) => {
   const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+  const istNow = new Date(now.getTime() + istOffset);
   let startDate, endDate = new Date(now);
 
   switch (filters.dateRange) {
     case 'today':
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Today in IST
+      const todayStartIST = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth(),
+        istNow.getUTCDate(),
+        0, 0, 0, 0
+      ));
+      startDate = new Date(todayStartIST.getTime() - istOffset);
+      
+      const todayEndIST = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth(),
+        istNow.getUTCDate(),
+        23, 59, 59, 999
+      ));
+      endDate = new Date(todayEndIST.getTime() - istOffset);
       break;
     case 'week':
       startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);

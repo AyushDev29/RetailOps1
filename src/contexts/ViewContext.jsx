@@ -43,14 +43,33 @@ const DEFAULT_VIEWS = {
 
 export function ViewProvider({ children }) {
   const { userProfile, user } = useAuth();
-  const [currentView, setCurrentView] = useState(VIEWS.LOGIN);
-  const [viewHistory, setViewHistory] = useState([VIEWS.LOGIN]);
+  
+  // Initialize currentView from localStorage or default to LOGIN
+  const [currentView, setCurrentView] = useState(() => {
+    const savedView = localStorage.getItem('currentView');
+    return savedView || VIEWS.LOGIN;
+  });
+  
+  const [viewHistory, setViewHistory] = useState(() => {
+    const savedHistory = localStorage.getItem('viewHistory');
+    return savedHistory ? JSON.parse(savedHistory) : [VIEWS.LOGIN];
+  });
 
   // Get current user role
   const userRole = useMemo(() => {
     if (!user) return 'guest';
     return userProfile?.role || 'guest';
   }, [user, userProfile]);
+
+  // Persist currentView to localStorage whenever it changes
+  React.useEffect(() => {
+    localStorage.setItem('currentView', currentView);
+  }, [currentView]);
+
+  // Persist viewHistory to localStorage whenever it changes
+  React.useEffect(() => {
+    localStorage.setItem('viewHistory', JSON.stringify(viewHistory));
+  }, [viewHistory]);
 
   // Check if user can access a view
   const canAccessView = useCallback((view) => {
@@ -107,15 +126,24 @@ export function ViewProvider({ children }) {
     navigateToView(defaultView, { replace: true });
   }, [userRole, navigateToView]);
 
-  // Auto-navigate to default view when role changes
+  // Auto-navigate to default view when role changes (only if on auth pages)
   React.useEffect(() => {
     if (userRole !== 'guest') {
-      const defaultView = DEFAULT_VIEWS[userRole];
+      // Only redirect if currently on auth pages
       if (currentView === VIEWS.LOGIN || currentView === VIEWS.REGISTER) {
+        const defaultView = DEFAULT_VIEWS[userRole];
         navigateToView(defaultView, { replace: true });
       }
+      // Don't check access on every render - trust localStorage
+      // Access check happens in navigateToView when user tries to navigate
+    } else {
+      // User is not authenticated (guest), redirect to login if not already on auth page
+      const isAuthView = currentView === VIEWS.LOGIN || currentView === VIEWS.REGISTER;
+      if (!isAuthView) {
+        navigateToView(VIEWS.LOGIN, { replace: true });
+      }
     }
-  }, [userRole, currentView, navigateToView]);
+  }, [userRole]); // Only run when userRole changes, not on every currentView change
 
   const value = useMemo(() => ({
     currentView,

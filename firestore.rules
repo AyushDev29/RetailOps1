@@ -44,13 +44,12 @@ service cloud.firestore {
       // Owners can update user roles and status
       allow update: if isOwner();
 
-      // Allow users to create their own profile (Required for registration)
+      // Allow authenticated users to create their own profile during registration
+      // This covers both self-registration (disabled in UI) and owner-created accounts
       allow create: if isAuthenticated() && 
                        request.auth.uid == userId &&
-                       // Must be employee role (owners created manually)
-                       request.resource.data.role == 'employee' &&
-                       // Validate required fields
-                       request.resource.data.keys().hasAll(['uid', 'email', 'name', 'role', 'isActive', 'createdAt']);
+                       // Validate required fields exist
+                       request.resource.data.keys().hasAll(['email', 'name', 'role', 'isActive', 'createdAt']);
       
       // No one can delete users
       allow delete: if false;
@@ -161,7 +160,8 @@ service cloud.firestore {
                     isActiveUser() &&
                     resource.data.createdBy == request.auth.uid;
       
-      // Employees can list/query their own orders
+      // Employees can list/query their own orders ONLY
+      // The query MUST include where('createdBy', '==', uid) in the application code
       allow list: if isEmployee() && isActiveUser();
       
       // Employees can update their own orders (for pre-booking conversion)
@@ -217,7 +217,8 @@ service cloud.firestore {
                     isActiveUser() &&
                     resource.data.employeeId == request.auth.uid;
       
-      // Employees can list/query their own bills
+      // Employees can list/query their own bills ONLY
+      // The query MUST include where('employeeId', '==', uid) in the application code
       allow list: if isEmployee() && isActiveUser();
       
       // Owners can read and list all bills

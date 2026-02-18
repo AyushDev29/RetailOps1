@@ -35,8 +35,14 @@ export const useAnalytics = (filters) => {
       setLoading(true);
       setError(null);
 
-      // Fetch all orders (no filters, we'll filter in memory)
-      const allOrders = await getOrdersForAnalytics({});
+      // Determine if owner or employee
+      const isOwner = !filters.employeeId || filters.isOwner;
+
+      // Fetch orders based on role
+      const allOrders = await getOrdersForAnalytics({ 
+        employeeId: filters.employeeId,
+        isOwner: isOwner
+      });
 
       // Get customer data for gender/age analysis
       const customerPhones = [...new Set(allOrders.map(o => o.customerPhone))];
@@ -55,33 +61,120 @@ export const useAnalytics = (filters) => {
     const { period, gender, ageGroup, exhibitionId, employeeId } = filters;
     const { orders, customersMap } = rawData;
 
-    // Calculate date ranges based on period filter
+    // Calculate date ranges based on period filter (IST timezone)
     const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+    const istNow = new Date(now.getTime() + istOffset);
+    
     let startDate, endDate, previousStartDate, previousEndDate;
 
     if (period === 'daily') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-      previousStartDate = new Date(startDate);
-      previousStartDate.setDate(previousStartDate.getDate() - 1);
-      previousEndDate = new Date(endDate);
-      previousEndDate.setDate(previousEndDate.getDate() - 1);
+      // Today in IST
+      startDate = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth(),
+        istNow.getUTCDate(),
+        0, 0, 0, 0
+      ));
+      startDate = new Date(startDate.getTime() - istOffset); // Convert to UTC
+      
+      endDate = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth(),
+        istNow.getUTCDate(),
+        23, 59, 59, 999
+      ));
+      endDate = new Date(endDate.getTime() - istOffset); // Convert to UTC
+      
+      // Yesterday in IST
+      const yesterdayIST = new Date(istNow.getTime() - (24 * 60 * 60 * 1000));
+      previousStartDate = new Date(Date.UTC(
+        yesterdayIST.getUTCFullYear(),
+        yesterdayIST.getUTCMonth(),
+        yesterdayIST.getUTCDate(),
+        0, 0, 0, 0
+      ));
+      previousStartDate = new Date(previousStartDate.getTime() - istOffset);
+      
+      previousEndDate = new Date(Date.UTC(
+        yesterdayIST.getUTCFullYear(),
+        yesterdayIST.getUTCMonth(),
+        yesterdayIST.getUTCDate(),
+        23, 59, 59, 999
+      ));
+      previousEndDate = new Date(previousEndDate.getTime() - istOffset);
+      
     } else if (period === 'weekly') {
-      const dayOfWeek = now.getDay();
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - dayOfWeek);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(now);
-      endDate.setHours(23, 59, 59, 999);
-      previousStartDate = new Date(startDate);
-      previousStartDate.setDate(previousStartDate.getDate() - 7);
-      previousEndDate = new Date(startDate);
-      previousEndDate.setDate(previousEndDate.getDate() - 1);
+      const dayOfWeek = istNow.getUTCDay();
+      
+      // This week start (Sunday) in IST
+      const weekStartIST = new Date(istNow.getTime() - (dayOfWeek * 24 * 60 * 60 * 1000));
+      startDate = new Date(Date.UTC(
+        weekStartIST.getUTCFullYear(),
+        weekStartIST.getUTCMonth(),
+        weekStartIST.getUTCDate(),
+        0, 0, 0, 0
+      ));
+      startDate = new Date(startDate.getTime() - istOffset);
+      
+      endDate = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth(),
+        istNow.getUTCDate(),
+        23, 59, 59, 999
+      ));
+      endDate = new Date(endDate.getTime() - istOffset);
+      
+      // Last week
+      previousStartDate = new Date(startDate.getTime() - (7 * 24 * 60 * 60 * 1000));
+      previousEndDate = new Date(startDate.getTime() - 1);
+      
     } else {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-      previousStartDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      previousEndDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      // This month in IST
+      startDate = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth(),
+        1,
+        0, 0, 0, 0
+      ));
+      startDate = new Date(startDate.getTime() - istOffset);
+      
+      const lastDayOfMonth = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth() + 1,
+        0
+      )).getUTCDate();
+      
+      endDate = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth(),
+        lastDayOfMonth,
+        23, 59, 59, 999
+      ));
+      endDate = new Date(endDate.getTime() - istOffset);
+      
+      // Last month
+      previousStartDate = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth() - 1,
+        1,
+        0, 0, 0, 0
+      ));
+      previousStartDate = new Date(previousStartDate.getTime() - istOffset);
+      
+      const lastDayOfPrevMonth = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth(),
+        0
+      )).getUTCDate();
+      
+      previousEndDate = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth() - 1,
+        lastDayOfPrevMonth,
+        23, 59, 59, 999
+      ));
+      previousEndDate = new Date(previousEndDate.getTime() - istOffset);
     }
 
     // Filter current period orders
