@@ -181,26 +181,17 @@ service cloud.firestore {
     // ============================================================================
     
     match /exhibitions/{exhibitionId} {
-      // Employees can create exhibitions
-      allow create: if isEmployee() && 
-                       isActiveUser() &&
-                       request.resource.data.createdBy == request.auth.uid;
+      // OWNERS can create exhibitions (changed from employees)
+      allow create: if isOwner() && isActiveUser();
       
-      // Employees can read their own exhibitions
-      allow get: if isEmployee() && 
-                    isActiveUser() &&
-                    resource.data.createdBy == request.auth.uid;
-      
-      // Employees can list/query their own exhibitions
-      allow list: if isEmployee() && isActiveUser();
-      
-      // Employees can update their own exhibitions
-      allow update: if isEmployee() && 
-                       isActiveUser() &&
-                       resource.data.createdBy == request.auth.uid;
+      // Employees can read all exhibitions (to select from dropdown)
+      allow read, list: if isEmployee() && isActiveUser();
       
       // Owners can read and list all exhibitions
       allow read, list: if isOwner() && isActiveUser();
+      
+      // OWNERS can update exhibitions (end exhibition, etc.)
+      allow update: if isOwner() && isActiveUser();
       
       // No one can delete exhibitions
       allow delete: if false;
