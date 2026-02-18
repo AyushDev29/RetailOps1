@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../services/firebase';
+import { useView } from '../../contexts/ViewContext';
 import '../../styles/Auth.css';
 
 function Register() {
@@ -15,7 +15,7 @@ function Register() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
+  const { navigateToView, VIEWS } = useView();
 
   const handleChange = (e) => {
     setFormData({
@@ -68,7 +68,7 @@ function Register() {
       setSuccess(true);
 
       setTimeout(() => {
-        navigate('/login');
+        navigateToView(VIEWS.LOGIN);
       }, 2500);
 
     } catch (err) {
@@ -275,7 +275,7 @@ function Register() {
               Already have an account?{' '}
               <button 
                 className="auth-form-link" 
-                onClick={() => navigate('/login')}
+                onClick={() => navigateToView(VIEWS.LOGIN)}
                 disabled={isLoading}
               >
                 Sign in

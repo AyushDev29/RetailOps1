@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useView } from '../../contexts/ViewContext';
 import '../../styles/Auth.css';
 
 function Login() {
@@ -11,7 +11,7 @@ function Login() {
   const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
   
   const { login, logout, user, userProfile, loading } = useAuth();
-  const navigate = useNavigate();
+  const { navigateToDefault, VIEWS, navigateToView } = useView();
 
   useEffect(() => {
     if (!loading && user && userProfile) {
@@ -31,11 +31,7 @@ function Login() {
   };
 
   const goToDashboard = () => {
-    if (userProfile?.role === 'owner') {
-      navigate('/owner', { replace: true });
-    } else {
-      navigate('/employee', { replace: true });
-    }
+    navigateToDefault();
   };
 
   const handleLogin = async (e) => {
@@ -51,6 +47,7 @@ function Login() {
 
     try {
       await login(email, password);
+      // Navigation will happen automatically via ViewContext
     } catch (err) {
       console.error('Login failed:', err);
       
@@ -244,7 +241,7 @@ function Login() {
               Don't have an account?{' '}
               <button 
                 className="auth-form-link" 
-                onClick={() => navigate('/register')}
+                onClick={() => navigateToView(VIEWS.REGISTER)}
                 disabled={isLoading}
               >
                 Create account

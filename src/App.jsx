@@ -1,15 +1,21 @@
 import React from 'react';
-import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
-import AppRoutes from './routes/AppRoutes';
+import { ViewProvider } from './contexts/ViewContext';
+import { DataProvider } from './contexts/DataContext';
+import AppShell from './components/layout/AppShell';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 function App() {
   return (
-    <BrowserRouter>
+    <ErrorBoundary>
       <AuthProvider>
-        <AppRoutes />
+        <ViewProvider>
+          <DataProvider>
+            <AppShell />
+          </DataProvider>
+        </ViewProvider>
       </AuthProvider>
-    </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

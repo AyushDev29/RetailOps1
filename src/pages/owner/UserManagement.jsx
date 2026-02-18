@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useView } from '../../contexts/ViewContext';
 import { getAllUsers, updateUser } from '../../services/authService';
 import '../../styles/OwnerDashboard.css';
 
 const UserManagement = () => {
   const { user, userProfile, logout } = useAuth();
-  const navigate = useNavigate();
+  const { navigateToView, VIEWS } = useView();
   
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +77,7 @@ const UserManagement = () => {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
+      navigateToView(VIEWS.LOGIN);
     } catch (err) {
       setError('Failed to logout: ' + err.message);
     }
@@ -96,10 +96,10 @@ const UserManagement = () => {
             <p>Welcome, {userProfile?.name || user?.email}</p>
           </div>
           <div className="header-actions">
-            <button onClick={() => navigate('/owner/dashboard')} className="btn btn-secondary">
+            <button onClick={() => navigateToView(VIEWS.OWNER_DASHBOARD)} className="btn btn-secondary">
               ← Back to Dashboard
             </button>
-            <button onClick={() => navigate('/owner/analytics')} className="btn btn-primary">
+            <button onClick={() => navigateToView(VIEWS.OWNER_ANALYTICS)} className="btn btn-primary">
               View Analytics
             </button>
             <button onClick={handleLogout} className="btn btn-logout">

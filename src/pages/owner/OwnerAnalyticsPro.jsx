@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useView } from '../../contexts/ViewContext';
 import { useOwnerAnalyticsPro } from '../../hooks/useOwnerAnalyticsPro';
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -12,7 +12,7 @@ import '../../styles/OwnerAnalyticsPro.css';
 
 const OwnerAnalyticsPro = () => {
   const { logout } = useAuth();
-  const navigate = useNavigate();
+  const { navigateToView, VIEWS } = useView();
 
   const [filters, setFilters] = useState({
     dateRange: 'month',
@@ -32,7 +32,7 @@ const OwnerAnalyticsPro = () => {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
+      navigateToView(VIEWS.LOGIN);
     } catch (err) {
       console.error('Logout failed:', err);
     }
@@ -188,7 +188,7 @@ const OwnerAnalyticsPro = () => {
             <button onClick={handleExportAnalytics} className="btn-secondary">
               📊 Export Data
             </button>
-            <button onClick={() => navigate('/owner/dashboard')} className="btn-secondary">
+            <button onClick={() => navigateToView(VIEWS.OWNER_DASHBOARD)} className="btn-secondary">
               ← Dashboard
             </button>
             <button onClick={handleLogout} className="btn-logout">

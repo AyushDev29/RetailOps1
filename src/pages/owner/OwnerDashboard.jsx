@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useView } from '../../contexts/ViewContext';
 import { getAllUsers, updateUser } from '../../services/authService';
 import { getAllProducts, createProduct, updateProduct, toggleProductActive, deductStockBatch, deleteProduct } from '../../services/productService';
 import { seedProducts } from '../../utils/seedProducts';
@@ -20,7 +20,7 @@ import '../../styles/OwnerDashboard.css';
 
 const OwnerDashboard = () => {
   const { user, userProfile, logout } = useAuth();
-  const navigate = useNavigate();
+  const { navigateToView, VIEWS } = useView();
 
   // State management
   const [activeTab, setActiveTab] = useState(() => {
@@ -140,7 +140,32 @@ const OwnerDashboard = () => {
           getAllUsers(),
           getAllProducts()
         ]);
-        setOrders(ordersData);
+        
+        // Resolve customer names for orders that have phone numbers as names
+        const ordersWithResolvedNames = await Promise.all(
+          ordersData.map(async (order) => {
+            // Check if customerName is missing or looks like a phone number
+            if (!order.customerName || /^\d{10}$/.test(order.customerName)) {
+              try {
+                // Try to get customer from customers collection using phone
+                const { getCustomerByPhone } = await import('../../services/customerService');
+                const customer = await getCustomerByPhone(order.customerPhone);
+                if (customer && customer.name) {
+                  return {
+                    ...order,
+                    _resolvedCustomerName: customer.name,
+                    customerName: customer.name // Update the field for consistency
+                  };
+                }
+              } catch (err) {
+                console.error('Failed to resolve customer name for order:', order.id, err);
+              }
+            }
+            return order;
+          })
+        );
+        
+        setOrders(ordersWithResolvedNames);
         setUsers(usersData); // Set users array for handleViewBill
         setProducts(productsData); // Set products array for handleViewBill
 
@@ -475,7 +500,7 @@ const OwnerDashboard = () => {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
+      navigateToView(VIEWS.LOGIN);
     } catch (err) {
       setError('Failed to logout: ' + err.message);
     }
@@ -548,9 +573,9 @@ const OwnerDashboard = () => {
         employeeName: employee?.name || employee?.email || 'Unknown',
         exhibitionId: order.exhibitionId || null,
         customer: {
-          name: order.customerPhone,
+          name: order.customerName || order._resolvedCustomerName || order.customerPhone,
           phone: order.customerPhone,
-          address: ''
+          address: order.customerAddress || ''
         }
       });
 
@@ -647,10 +672,10 @@ const OwnerDashboard = () => {
             <p>Welcome, {userProfile?.name || user?.email}</p>
           </div>
           <div className="header-actions">
-            <button onClick={() => navigate('/owner/analytics')} className="btn btn-primary">
+            <button onClick={() => navigateToView(VIEWS.OWNER_ANALYTICS)} className="btn btn-primary">
               View Analytics
             </button>
-            <button onClick={() => navigate('/owner/users')} className="btn btn-primary">
+            <button onClick={() => navigateToView(VIEWS.OWNER_USERS)} className="btn btn-primary">
               User Management
             </button>
             <button onClick={handleLogout} className="btn btn-logout">
@@ -1131,6 +1156,7 @@ const OwnerDashboard = () => {
                 <thead>
                   <tr>
                     <th>Type</th>
+                    <th>Customer Name</th>
                     <th>Customer Phone</th>
                     <th>Items</th>
                     <th>Total Amount</th>
@@ -1154,6 +1180,18 @@ const OwnerDashboard = () => {
                           <span className="type-badge">
                             {order.type === 'daily' ? 'Store' : order.type === 'exhibition' ? 'Exhibition' : 'Pre-Booking'}
                           </span>
+                        </td>
+                        <td>
+                          {(() => {
+                            // If customerName is missing or looks like a phone number, show "Loading..."
+                            // The actual lookup will happen in the data loading phase
+                            const name = order.customerName || 'N/A';
+                            // Check if name is actually a phone number (10 digits)
+                            if (/^\d{10}$/.test(name)) {
+                              return order._resolvedCustomerName || name;
+                            }
+                            return name;
+                          })()}
                         </td>
                         <td>{order.customerPhone}</td>
                         <td>

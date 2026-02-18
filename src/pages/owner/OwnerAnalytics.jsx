@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useView } from '../../contexts/ViewContext';
 import { useOwnerAnalytics } from '../../hooks/useOwnerAnalytics';
 import ChartWrapper from '../../components/common/ChartWrapper';
 import StatsCard from '../../components/common/StatsCard';
@@ -11,7 +11,7 @@ import '../../styles/OwnerAnalytics.css';
 
 const OwnerAnalytics = () => {
   const { user, userProfile, logout } = useAuth();
-  const navigate = useNavigate();
+  const { navigateToView, VIEWS } = useView();
   
   // Filters state
   const [filters, setFilters] = useState({
@@ -32,7 +32,7 @@ const OwnerAnalytics = () => {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
+      navigateToView(VIEWS.LOGIN);
     } catch (err) {
       console.error('Logout failed:', err);
     }
@@ -62,7 +62,7 @@ const OwnerAnalytics = () => {
             </span>
           </div>
           <div className="header-actions">
-            <button onClick={() => navigate('/owner')} className="btn btn-secondary">
+            <button onClick={() => navigateToView(VIEWS.OWNER_DASHBOARD)} className="btn btn-secondary">
               Back to Dashboard
             </button>
             <button onClick={handleLogout} className="btn btn-logout">

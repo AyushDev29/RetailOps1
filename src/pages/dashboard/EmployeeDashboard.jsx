@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useView } from '../../contexts/ViewContext';
 import { getActiveProducts } from '../../services/productService';
 import { getActiveExhibition, startExhibition, endExhibition } from '../../services/exhibitionService';
 import { createOrder, getPendingPreBookings, convertPreBookingToSale } from '../../services/orderService';
@@ -11,11 +11,12 @@ import { saveBill, getTodaysBills } from '../../services/billStorageService';
 import { deductStockBatch } from '../../services/productService';
 import { recordPayment } from '../../services/paymentService';
 import BillPreview from '../../components/billing/BillPreview';
+import ProductSearchInput from '../../components/common/ProductSearchInput';
 import '../../styles/EmployeeDashboard.css';
 
 const EmployeeDashboard = () => {
   const { user, userProfile, logout } = useAuth();
-  const navigate = useNavigate();
+  const { navigateToView, VIEWS } = useView();
   
   const [products, setProducts] = useState([]);
   const [activeExhibition, setActiveExhibition] = useState(null);
@@ -41,8 +42,39 @@ const EmployeeDashboard = () => {
   });
   
   // Product selection state
-  const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedQuantity, setSelectedQuantity] = useState(1);
+  
+  // Handle product selection from search
+  const handleProductSelect = (product) => {
+    if (!product) return;
+    
+    // Check if product already in cart
+    const existingIndex = cart.findIndex(item => item.productId === product.id);
+    
+    if (existingIndex >= 0) {
+      // Update quantity
+      const updatedCart = [...cart];
+      updatedCart[existingIndex].quantity += selectedQuantity;
+      setCart(updatedCart);
+    } else {
+      // Add new item with field names matching orderCalculationService expectations
+      setCart([...cart, {
+        productId: product.id,
+        name: product.name,  // orderCalculationService expects 'name', not 'productName'
+        sku: product.sku,    // orderCalculationService expects 'sku', not 'productSKU'
+        quantity: selectedQuantity,
+        unitBasePrice: product.basePrice,
+        unitSalePrice: product.isOnSale ? product.salePrice : null,
+        gstRate: product.gstRate,
+        isTaxInclusive: product.isTaxInclusive,
+        category: product.category
+      }]);
+    }
+    
+    // Reset quantity
+    setSelectedQuantity(1);
+    setError('');
+  };
   
   const [exhibitionForm, setExhibitionForm] = useState({
     location: '',
@@ -56,6 +88,24 @@ const EmployeeDashboard = () => {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentReferenceId, setPaymentReferenceId] = useState('');
 
+  // Clean up invalid cart items on mount
+  useEffect(() => {
+    if (cart.length > 0) {
+      const validItems = cart.filter(item => 
+        item.name && 
+        item.sku && 
+        typeof item.unitBasePrice === 'number' &&
+        typeof item.gstRate === 'number' &&
+        typeof item.isTaxInclusive === 'boolean'
+      );
+      
+      if (validItems.length !== cart.length) {
+        console.warn('Cleaning up invalid cart items on mount');
+        setCart(validItems);
+      }
+    }
+  }, []); // Run once on mount
+
   useEffect(() => {
     loadData();
   }, [user]);
@@ -64,11 +114,34 @@ const EmployeeDashboard = () => {
   useEffect(() => {
     if (cart.length > 0 && orderType !== 'prebooking') {
       try {
-        const orderCalc = calculateOrder({ items: cart, employeeDiscount: 0 });
-        const totalAmount = Math.round(orderCalc.summary.grandTotal);
-        setPaymentAmount(totalAmount.toString());
+        // Validate that all cart items have required fields
+        const allItemsValid = cart.every(item => {
+          const isValid = 
+            item.name && 
+            item.sku && 
+            typeof item.unitBasePrice === 'number' &&
+            typeof item.gstRate === 'number' &&
+            typeof item.isTaxInclusive === 'boolean';
+          
+          if (!isValid) {
+            console.warn('Invalid cart item:', item);
+          }
+          return isValid;
+        });
+
+        if (allItemsValid) {
+          const orderCalc = calculateOrder({ items: cart, employeeDiscount: 0 });
+          const totalAmount = Math.round(orderCalc.summary.grandTotal);
+          setPaymentAmount(totalAmount.toString());
+        } else {
+          // Cart has invalid items, clear it
+          console.warn('Cart has invalid items, clearing cart');
+          setCart([]);
+          setPaymentAmount('');
+        }
       } catch (err) {
         console.error('Error calculating payment amount:', err);
+        setPaymentAmount('');
       }
     } else {
       setPaymentAmount('');
@@ -151,55 +224,6 @@ const EmployeeDashboard = () => {
     }
   };
 
-  // Add product to cart
-  const handleAddToCart = () => {
-    if (!selectedProductId) {
-      setError('Please select a product');
-      return;
-    }
-    
-    if (selectedQuantity <= 0) {
-      setError('Quantity must be at least 1');
-      return;
-    }
-    
-    const product = products.find(p => p.id === selectedProductId);
-    if (!product) {
-      setError('Product not found');
-      return;
-    }
-    
-    // Check if product already in cart
-    const existingIndex = cart.findIndex(item => item.productId === selectedProductId);
-    
-    if (existingIndex >= 0) {
-      // Update quantity
-      const newCart = [...cart];
-      newCart[existingIndex].quantity += selectedQuantity;
-      setCart(newCart);
-    } else {
-      // Add new item with complete structure required by orderCalculationService
-      setCart([...cart, {
-        productId: product.id,
-        name: product.name,
-        sku: product.sku,
-        category: product.category,
-        subcategory: product.subcategory || product.category,
-        quantity: selectedQuantity,
-        unitBasePrice: product.basePrice,  // Changed from basePrice
-        unitSalePrice: product.isOnSale ? product.salePrice : null,  // Changed from salePrice
-        gstRate: product.gstRate,
-        isTaxInclusive: product.isTaxInclusive,
-        isOnSale: product.isOnSale
-      }]);
-    }
-    
-    // Reset selection
-    setSelectedProductId('');
-    setSelectedQuantity(1);
-    setError('');
-  };
-
   // Remove item from cart
   const handleRemoveFromCart = (productId) => {
     setCart(cart.filter(item => item.productId !== productId));
@@ -235,9 +259,53 @@ const EmployeeDashboard = () => {
         setError('Please fill in customer information');
         return;
       }
+
+      // Validate phone number is exactly 10 digits
+      if (formData.customerPhone.length !== 10) {
+        setError('Phone number must be exactly 10 digits');
+        return;
+      }
+
+      // CRITICAL: Ensure customer name is not the phone number
+      if (formData.customerName === formData.customerPhone || /^\d{10,}$/.test(formData.customerName)) {
+        setError('Customer name cannot be a phone number. Please enter the actual name.');
+        return;
+      }
+
+      // Validate customer name is at least 2 characters
+      if (formData.customerName.trim().length < 2) {
+        setError('Please enter a valid customer name (at least 2 characters)');
+        return;
+      }
+
+      // Validate Gender and Age Group are selected
+      if (!formData.customerGender) {
+        setError('Please select customer gender');
+        return;
+      }
+
+      if (!formData.customerAgeGroup) {
+        setError('Please select customer age group');
+        return;
+      }
       
       if (cart.length === 0) {
         setError('Please add at least one product to cart');
+        return;
+      }
+
+      // Validate cart items have all required fields
+      const invalidItems = cart.filter(item => 
+        !item.name || 
+        !item.sku || 
+        typeof item.unitBasePrice !== 'number' ||
+        typeof item.gstRate !== 'number' ||
+        typeof item.isTaxInclusive !== 'boolean'
+      );
+
+      if (invalidItems.length > 0) {
+        console.error('Invalid cart items:', invalidItems);
+        setError('Cart contains invalid items. Please clear cart and add products again.');
         return;
       }
       
@@ -277,6 +345,27 @@ const EmployeeDashboard = () => {
       let bill = null;
       if (orderType !== 'prebooking') {
         try {
+          // Validate cart items before processing
+          const invalidItems = cart.filter(item => 
+            !item.name || 
+            !item.sku || 
+            typeof item.unitBasePrice !== 'number' ||
+            typeof item.gstRate !== 'number' ||
+            typeof item.isTaxInclusive !== 'boolean'
+          );
+
+          if (invalidItems.length > 0) {
+            console.error('Invalid cart items found:', invalidItems);
+            throw new Error('Cart contains invalid items. Please remove them and try again.');
+          }
+
+          console.log('Cart items being processed:', cart);
+          console.log('Customer data:', {
+            name: formData.customerName,
+            phone: formData.customerPhone,
+            address: formData.customerAddress
+          });
+
           // Calculate order
           const orderCalculation = calculateOrder({
             items: cart,
@@ -383,6 +472,12 @@ const EmployeeDashboard = () => {
         // Update bill with actual order ID
         bill.orderId = createdOrder?.id || bill.orderId;
         
+        // CRITICAL DEBUG: Log the bill object before saving
+        console.log('=== BILL BEFORE SAVING ===');
+        console.log('Bill customer data:', bill.customer);
+        console.log('Full bill object:', bill);
+        console.log('========================');
+        
         // Save bill to Firestore
         try {
           const billId = await saveBill(bill);
@@ -467,15 +562,20 @@ const EmployeeDashboard = () => {
 
   const handlePhoneChange = async (e) => {
     const phone = e.target.value;
-    setFormData({...formData, customerPhone: phone});
     
-    if (phone.length >= 10) {
+    // Only allow digits and limit to 10 characters
+    const cleanedPhone = phone.replace(/\D/g, '').slice(0, 10);
+    
+    setFormData({...formData, customerPhone: cleanedPhone});
+    
+    // Auto-fill customer data when 10 digits are entered
+    if (cleanedPhone.length === 10) {
       try {
-        const customer = await getCustomerByPhone(phone);
+        const customer = await getCustomerByPhone(cleanedPhone);
         if (customer) {
           setFormData({
             ...formData,
-            customerPhone: phone,
+            customerPhone: cleanedPhone,
             customerName: customer.name || '',
             customerAddress: customer.address || '',
             customerGender: customer.gender || '',
@@ -507,7 +607,7 @@ const EmployeeDashboard = () => {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
+      navigateToView(VIEWS.LOGIN);
     } catch (err) {
       setError('Failed to logout: ' + err.message);
     }
@@ -542,7 +642,7 @@ const EmployeeDashboard = () => {
               </div>
               <span className="emp-user-name">{userProfile?.name || user?.email}</span>
             </div>
-            <button onClick={() => navigate('/employee/analytics')} className="emp-nav-btn emp-nav-btn-primary">
+            <button onClick={() => navigateToView(VIEWS.EMPLOYEE_ANALYTICS)} className="emp-nav-btn emp-nav-btn-primary">
               View Analytics
             </button>
             <button onClick={handleLogout} className="emp-nav-btn">
@@ -730,6 +830,9 @@ const EmployeeDashboard = () => {
                         value={formData.customerPhone}
                         onChange={handlePhoneChange}
                         placeholder="10-digit phone number"
+                        maxLength={10}
+                        pattern="[0-9]{10}"
+                        inputMode="numeric"
                         required
                       />
                       <span className="emp-helper">Auto-fills existing customer data</span>
@@ -760,11 +863,12 @@ const EmployeeDashboard = () => {
 
                     <div className="emp-form-row">
                       <div className="emp-form-group">
-                        <label className="emp-label">Gender</label>
+                        <label className="emp-label">Gender *</label>
                         <select
                           className="emp-select"
                           value={formData.customerGender}
                           onChange={(e) => setFormData({...formData, customerGender: e.target.value})}
+                          required
                         >
                           <option value="">Select</option>
                           <option value="Male">Male</option>
@@ -774,11 +878,12 @@ const EmployeeDashboard = () => {
                       </div>
 
                       <div className="emp-form-group">
-                        <label className="emp-label">Age Group</label>
+                        <label className="emp-label">Age Group *</label>
                         <select
                           className="emp-select"
                           value={formData.customerAgeGroup}
                           onChange={(e) => setFormData({...formData, customerAgeGroup: e.target.value})}
+                          required
                         >
                           <option value="">Select</option>
                           <option value="0-12">0-12 (Kids)</option>
@@ -796,25 +901,17 @@ const EmployeeDashboard = () => {
                     <h4 className="emp-form-section-title">Add Products to Cart</h4>
                     
                     <div className="emp-form-group">
-                      <label className="emp-label">Select Product *</label>
+                      <label className="emp-label">Search Product *</label>
                       {products.length === 0 ? (
                         <div className="emp-empty-state">
                           <p>No products available. Contact owner to add products.</p>
                         </div>
                       ) : (
-                        <select
-                          className="emp-select"
-                          value={selectedProductId}
-                          onChange={(e) => setSelectedProductId(e.target.value)}
-                        >
-                          <option value="">Select product</option>
-                          {products.map(product => (
-                            <option key={product.id} value={product.id}>
-                              {product.name} - ₹{product.isOnSale ? product.salePrice : product.basePrice}
-                              {product.isOnSale && ' (SALE)'}
-                            </option>
-                          ))}
-                        </select>
+                        <ProductSearchInput
+                          products={products}
+                          onSelect={handleProductSelect}
+                          placeholder="Type to search products (e.g., shirt, kurti, jeans)..."
+                        />
                       )}
                     </div>
 
@@ -828,17 +925,6 @@ const EmployeeDashboard = () => {
                           onChange={(e) => setSelectedQuantity(parseInt(e.target.value) || 1)}
                           min="1"
                         />
-                      </div>
-
-                      <div className="emp-form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                        <button
-                          type="button"
-                          onClick={handleAddToCart}
-                          className="emp-btn emp-btn-secondary"
-                          disabled={!selectedProductId}
-                        >
-                          ➕ Add to Cart
-                        </button>
                       </div>
                     </div>
 
@@ -998,17 +1084,21 @@ const EmployeeDashboard = () => {
                             <input
                               type="text"
                               value={paymentAmount}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
-                                  setPaymentAmount(value);
-                                }
-                              }}
+                              readOnly
                               placeholder={totalAmount.toString()}
-                              style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                              style={{ 
+                                width: '100%', 
+                                padding: '8px', 
+                                fontSize: '13px', 
+                                border: '1px solid #cbd5e1', 
+                                borderRadius: '4px',
+                                backgroundColor: '#f1f5f9',
+                                cursor: 'not-allowed',
+                                color: '#475569'
+                              }}
                             />
                             <small style={{ fontSize: '11px', color: '#64748b' }}>
-                              Total: ₹{totalAmount}
+                              Total: ₹{totalAmount} (Auto-calculated)
                             </small>
                           </div>
                         </div>

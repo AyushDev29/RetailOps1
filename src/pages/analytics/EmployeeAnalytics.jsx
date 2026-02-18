@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useView } from '../../contexts/ViewContext';
 import { useAnalytics } from '../../hooks/useAnalytics';
 import { getExhibitionsForFilter } from '../../services/analyticsService';
+import { getAllExhibitions } from '../../services/exhibitionService';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -12,7 +13,7 @@ import '../../styles/EmployeeAnalytics.css';
 
 const EmployeeAnalytics = () => {
   const { user, userProfile, logout } = useAuth();
-  const navigate = useNavigate();
+  const { navigateToView, VIEWS } = useView();
   
   // Filters state
   const [filters, setFilters] = useState({
@@ -25,6 +26,7 @@ const EmployeeAnalytics = () => {
   
   const [exhibitions, setExhibitions] = useState([]);
   const [exhibitionMap, setExhibitionMap] = useState({});
+  const [myExhibitions, setMyExhibitions] = useState([]);
   
   // Fetch analytics using custom hook
   const { analytics, loading, error } = useAnalytics(filters);
@@ -73,6 +75,7 @@ const EmployeeAnalytics = () => {
   // Load exhibitions for filter
   useEffect(() => {
     loadExhibitions();
+    loadMyExhibitions();
   }, []);
   
   const loadExhibitions = async () => {
@@ -85,6 +88,27 @@ const EmployeeAnalytics = () => {
         map[ex.id] = ex.location;
       });
       setExhibitionMap(map);
+    } catch (err) {
+      console.error('Error loading exhibitions:', err);
+    }
+  };
+  
+  const loadMyExhibitions = async () => {
+    try {
+      // Get ALL exhibitions (not just current user's)
+      const data = await getAllExhibitions();
+      
+      // Filter for this month only
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      
+      const thisMonthExhibitions = data.filter(ex => {
+        const createdAt = ex.createdAt?.toDate ? ex.createdAt.toDate() : new Date(ex.createdAt);
+        return createdAt >= startOfMonth && createdAt <= endOfMonth;
+      });
+      
+      setMyExhibitions(thisMonthExhibitions);
     } catch (err) {
       console.error('Error loading exhibitions:', err);
     }
@@ -113,14 +137,14 @@ const EmployeeAnalytics = () => {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
+      navigateToView(VIEWS.LOGIN);
     } catch (err) {
       console.error('Logout failed:', err);
     }
   };
 
   const handleBackToDashboard = () => {
-    navigate('/employee');
+    navigateToView(VIEWS.EMPLOYEE_DASHBOARD);
   };
   
   // Get period-accurate label for comparison chart
@@ -565,6 +589,194 @@ const EmployeeAnalytics = () => {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+        
+        {/* This Month's Exhibitions Timeline */}
+        <div className="chart-card chart-wide">
+          <div className="chart-header">
+            <div>
+              <h3>This Month's Exhibitions</h3>
+              <p className="chart-subtitle">All exhibitions by all employees</p>
+            </div>
+          </div>
+          <div className="chart-body">
+            {myExhibitions.length === 0 ? (
+              <div className="chart-empty">No exhibitions this month</div>
+            ) : (
+              <div style={{ padding: '20px' }}>
+                {myExhibitions.map((ex, index) => {
+                  const startDate = ex.startTime ? new Date(ex.startTime) : (ex.createdAt?.toDate ? ex.createdAt.toDate() : new Date());
+                  const endDate = ex.endTime?.toDate ? ex.endTime.toDate() : null;
+                  const isOngoing = ex.active;
+                  const isMyExhibition = ex.createdBy === user.uid;
+                  
+                  return (
+                    <div 
+                      key={ex.id} 
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '16px',
+                        marginBottom: '12px',
+                        background: isOngoing ? '#dbeafe' : '#f3f4f6',
+                        borderRadius: '8px',
+                        border: `2px solid ${isOngoing ? '#3b82f6' : '#9ca3af'}`,
+                        position: 'relative'
+                      }}
+                    >
+                      {/* Status Indicator */}
+                      <div style={{
+                        width: '12px',
+                        height: '12px',
+                        borderRadius: '50%',
+                        background: isOngoing ? '#10b981' : '#6b7280',
+                        marginRight: '16px',
+                        flexShrink: 0,
+                        boxShadow: isOngoing ? '0 0 0 4px rgba(16, 185, 129, 0.2)' : 'none'
+                      }} />
+                      
+                      {/* Exhibition Info */}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '12px',
+                          marginBottom: '8px',
+                          flexWrap: 'wrap'
+                        }}>
+                          <h4 style={{ 
+                            margin: 0, 
+                            fontSize: '16px', 
+                            fontWeight: '600',
+                            color: '#111827'
+                          }}>
+                            {ex.location}
+                          </h4>
+                          <span style={{
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            background: isOngoing ? '#10b981' : '#6b7280',
+                            color: 'white',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            {isOngoing ? '🟢 Ongoing' : '✓ Completed'}
+                          </span>
+                          <span style={{
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            background: isMyExhibition ? '#8b5cf6' : '#64748b',
+                            color: 'white'
+                          }}>
+                            {isMyExhibition ? '👤 You' : '👥 Colleague'}
+                          </span>
+                        </div>
+                        
+                        <div style={{ 
+                          display: 'flex', 
+                          gap: '24px',
+                          fontSize: '13px',
+                          color: '#6b7280',
+                          flexWrap: 'wrap'
+                        }}>
+                          <div>
+                            <span style={{ fontWeight: '500' }}>Started:</span>{' '}
+                            {startDate.toLocaleDateString('en-IN', { 
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                          {endDate && (
+                            <div>
+                              <span style={{ fontWeight: '500' }}>Ended:</span>{' '}
+                              {endDate.toLocaleDateString('en-IN', { 
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </div>
+                          )}
+                          {!endDate && isOngoing && (
+                            <div style={{ color: '#10b981', fontWeight: '500' }}>
+                              ⏱️ In Progress
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Duration Badge */}
+                      <div style={{
+                        padding: '8px 16px',
+                        background: 'white',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        color: '#111827',
+                        border: '1px solid #e5e7eb'
+                      }}>
+                        {(() => {
+                          if (isOngoing) {
+                            const duration = Math.floor((new Date() - startDate) / (1000 * 60 * 60));
+                            return `${duration}h running`;
+                          } else if (endDate) {
+                            const duration = Math.floor((endDate - startDate) / (1000 * 60 * 60));
+                            return `${duration}h duration`;
+                          }
+                          return 'N/A';
+                        })()}
+                      </div>
+                    </div>
+                  );
+                })}
+                
+                {/* Summary Stats */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '12px',
+                  marginTop: '20px',
+                  padding: '16px',
+                  background: '#f9fafb',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb'
+                }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#111827' }}>
+                      {myExhibitions.length}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Total This Month
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#10b981' }}>
+                      {myExhibitions.filter(ex => ex.active).length}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Ongoing
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#6b7280' }}>
+                      {myExhibitions.filter(ex => !ex.active).length}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Completed
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
