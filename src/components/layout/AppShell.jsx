@@ -12,7 +12,6 @@ const EmployeeAnalytics = lazy(() => import('../../pages/analytics/EmployeeAnaly
 const OwnerDashboard = lazy(() => import('../../pages/owner/OwnerDashboard'));
 const OwnerAnalyticsPro = lazy(() => import('../../pages/owner/OwnerAnalyticsPro'));
 const UserManagement = lazy(() => import('../../pages/owner/UserManagement'));
-const FixBills = lazy(() => import('../../pages/owner/FixBills'));
 const BillPreviewTest = lazy(() => import('../../pages/test/BillPreviewTest'));
 
 // View renderer with memoization
@@ -34,8 +33,6 @@ const ViewRenderer = memo(({ view }) => {
       return <OwnerAnalyticsPro />;
     case VIEWS.OWNER_USERS:
       return <UserManagement />;
-    case VIEWS.OWNER_FIX_BILLS:
-      return <FixBills />;
     case VIEWS.TEST_BILL:
       return <BillPreviewTest />;
     default:

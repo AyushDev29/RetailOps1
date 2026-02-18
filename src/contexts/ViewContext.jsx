@@ -17,7 +17,6 @@ export const VIEWS = {
   OWNER_DASHBOARD: 'owner-dashboard',
   OWNER_ANALYTICS: 'owner-analytics',
   OWNER_USERS: 'owner-users',
-  OWNER_FIX_BILLS: 'owner-fix-bills',
   
   // Test views
   TEST_BILL: 'test-bill'
@@ -29,10 +28,6 @@ const VIEW_ACCESS = {
   [VIEWS.REGISTER]: ['guest'],
   [VIEWS.EMPLOYEE_DASHBOARD]: ['employee'],
   [VIEWS.EMPLOYEE_ANALYTICS]: ['employee'],
-  [VIEWS.OWNER_DASHBOARD]: ['owner'],
-  [VIEWS.OWNER_ANALYTICS]: ['owner'],
-  [VIEWS.OWNER_USERS]: ['owner'],
-  [VIEWS.OWNER_FIX_BILLS]: ['owner'],
   [VIEWS.OWNER_DASHBOARD]: ['owner'],
   [VIEWS.OWNER_ANALYTICS]: ['owner'],
   [VIEWS.OWNER_USERS]: ['owner'],
