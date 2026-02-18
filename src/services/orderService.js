@@ -200,8 +200,8 @@ export const convertPreBookingToSale = async (preBookingId, exhibitionId = null)
       throw new Error('Pre-booking already converted');
     }
     
-    // Determine new type based on exhibition
-    const newType = exhibitionId ? 'exhibition' : 'daily';
+    // KEEP TYPE AS PREBOOKING - don't change to daily or exhibition
+    // This ensures analytics track it correctly as a pre-booking sale
     
     // Import required services
     const { generateBill } = await import('./billingService');
@@ -236,10 +236,10 @@ export const convertPreBookingToSale = async (preBookingId, exhibitionId = null)
       employeeDiscount: 0
     });
     
-    // Generate bill for the order
+    // Generate bill for the order - use 'prebooking' as orderType
     const bill = generateBill(orderCalculation, {
       orderId: preBookingId,
-      orderType: newType,
+      orderType: 'prebooking',
       employeeId: orderData.createdBy,
       employeeName: orderData.employeeName || 'Employee',
       exhibitionId: exhibitionId || null,
@@ -274,9 +274,8 @@ export const convertPreBookingToSale = async (preBookingId, exhibitionId = null)
       }]);
     }
     
-    // Update order to completed
+    // Update order to completed - KEEP TYPE AS PREBOOKING
     await updateDoc(orderRef, {
-      type: newType,
       status: 'completed',
       exhibitionId: exhibitionId || null,
       billId: billId,
@@ -287,7 +286,6 @@ export const convertPreBookingToSale = async (preBookingId, exhibitionId = null)
     return {
       id: preBookingId,
       ...orderData,
-      type: newType,
       status: 'completed',
       exhibitionId,
       billId: billId,

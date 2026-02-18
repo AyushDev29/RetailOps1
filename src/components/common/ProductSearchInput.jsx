@@ -169,10 +169,11 @@ const ProductSearchInput = ({ products, onSelect, placeholder = "Search products
 
   // Handle product selection
   const handleSelectProduct = (product) => {
-    setSearchTerm(product.name);
     setShowSuggestions(false);
     setSuggestions([]);
     onSelect(product);
+    // Clear search term after adding to cart
+    setSearchTerm('');
   };
 
   // Handle keyboard navigation

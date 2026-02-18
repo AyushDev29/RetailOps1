@@ -1005,20 +1005,43 @@ const OwnerDashboard = () => {
                     </td>
                   </tr>
                 ) : (
-                  products.map(p => (
-                    <tr key={p.id}>
-                      <td>{p.name}</td>
-                      <td><code>{p.sku}</code></td>
-                      <td>{p.category}/{p.subcategory}</td>
-                      <td>₹{p.basePrice}</td>
-                      <td>{p.isOnSale ? `₹${p.salePrice}` : '-'}</td>
-                      <td>{p.gstRate}%</td>
-                      <td>
-                        {p.stockQty}
-                        {p.stockQty <= p.lowStockThreshold && (
-                          <span style={{ color: 'red', marginLeft: '5px' }}>⚠️</span>
-                        )}
-                      </td>
+                  products.map(p => {
+                    const isLowStock = p.stockQty <= p.lowStockThreshold;
+                    return (
+                      <tr 
+                        key={p.id}
+                        style={{
+                          backgroundColor: isLowStock ? '#fee2e2' : 'transparent',
+                          borderLeft: isLowStock ? '4px solid #ef4444' : 'none'
+                        }}
+                      >
+                        <td style={{ fontWeight: isLowStock ? '600' : 'normal', color: isLowStock ? '#991b1b' : 'inherit' }}>
+                          {p.name}
+                        </td>
+                        <td><code>{p.sku}</code></td>
+                        <td>{p.category}/{p.subcategory}</td>
+                        <td>₹{p.basePrice}</td>
+                        <td>{p.isOnSale ? `₹${p.salePrice}` : '-'}</td>
+                        <td>{p.gstRate}%</td>
+                        <td>
+                          <span style={{ 
+                            fontWeight: isLowStock ? '700' : 'normal',
+                            color: isLowStock ? '#dc2626' : 'inherit',
+                            fontSize: isLowStock ? '15px' : 'inherit'
+                          }}>
+                            {p.stockQty}
+                          </span>
+                          {isLowStock && (
+                            <span style={{ 
+                              color: '#dc2626', 
+                              marginLeft: '8px',
+                              fontSize: '16px',
+                              animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                            }}>
+                              ⚠️
+                            </span>
+                          )}
+                        </td>
                       <td>
                         <span className={`status-badge ${p.isActive ? 'active' : 'inactive'}`}>
                           {p.isActive ? 'Active' : 'Inactive'}
@@ -1114,7 +1137,8 @@ const OwnerDashboard = () => {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -42,9 +42,6 @@ const EmployeeDashboard = () => {
     deliveryDate: ''
   });
   
-  // Product selection state
-  const [selectedQuantity, setSelectedQuantity] = useState(1);
-  
   // Handle product selection from search
   const handleProductSelect = (product) => {
     if (!product) return;
@@ -53,17 +50,17 @@ const EmployeeDashboard = () => {
     const existingIndex = cart.findIndex(item => item.productId === product.id);
     
     if (existingIndex >= 0) {
-      // Update quantity
+      // Update quantity by 1
       const updatedCart = [...cart];
-      updatedCart[existingIndex].quantity += selectedQuantity;
+      updatedCart[existingIndex].quantity += 1;
       setCart(updatedCart);
     } else {
-      // Add new item with field names matching orderCalculationService expectations
+      // Add new item with quantity 1
       setCart([...cart, {
         productId: product.id,
         name: product.name,  // orderCalculationService expects 'name', not 'productName'
         sku: product.sku,    // orderCalculationService expects 'sku', not 'productSKU'
-        quantity: selectedQuantity,
+        quantity: 1,
         unitBasePrice: product.basePrice,
         unitSalePrice: product.isOnSale ? product.salePrice : null,
         gstRate: product.gstRate,
@@ -72,8 +69,6 @@ const EmployeeDashboard = () => {
       }]);
     }
     
-    // Reset quantity
-    setSelectedQuantity(1);
     setError('');
   };
 
@@ -293,61 +288,59 @@ const EmployeeDashboard = () => {
         exhibitionId = null;
       }
       
-      // Generate bill FIRST for completed orders (not pre-bookings)
+      // Generate bill for ALL order types (including pre-bookings)
       let bill = null;
-      if (orderType !== 'prebooking') {
-        try {
-          // Validate cart items before processing
-          const invalidItems = cart.filter(item => 
-            !item.name || 
-            !item.sku || 
-            typeof item.unitBasePrice !== 'number' ||
-            typeof item.gstRate !== 'number' ||
-            typeof item.isTaxInclusive !== 'boolean'
-          );
+      try {
+        // Validate cart items before processing
+        const invalidItems = cart.filter(item => 
+          !item.name || 
+          !item.sku || 
+          typeof item.unitBasePrice !== 'number' ||
+          typeof item.gstRate !== 'number' ||
+          typeof item.isTaxInclusive !== 'boolean'
+        );
 
-          if (invalidItems.length > 0) {
-            console.error('Invalid cart items found:', invalidItems);
-            throw new Error('Cart contains invalid items. Please remove them and try again.');
-          }
+        if (invalidItems.length > 0) {
+          console.error('Invalid cart items found:', invalidItems);
+          throw new Error('Cart contains invalid items. Please remove them and try again.');
+        }
 
-          console.log('Cart items being processed:', cart);
-          console.log('Customer data:', {
+        console.log('Cart items being processed:', cart);
+        console.log('Customer data:', {
+          name: formData.customerName,
+          phone: formData.customerPhone,
+          address: formData.customerAddress
+        });
+
+        // Calculate order
+        const orderCalculation = calculateOrder({
+          items: cart,
+          employeeDiscount: 0
+        });
+        
+        console.log('Order calculation:', orderCalculation);
+        
+        // Generate bill for all order types
+        bill = generateBill(orderCalculation, {
+          orderId: 'TEMP-' + Date.now(), // Temporary ID, will update after order creation
+          orderType: finalOrderType,
+          employeeId: user.uid,
+          employeeName: userProfile?.name || user.email,
+          exhibitionId: exhibitionId,
+          customer: {
             name: formData.customerName,
             phone: formData.customerPhone,
-            address: formData.customerAddress
-          });
-
-          // Calculate order
-          const orderCalculation = calculateOrder({
-            items: cart,
-            employeeDiscount: 0
-          });
-          
-          console.log('Order calculation:', orderCalculation);
-          
-          // Generate bill
-          bill = generateBill(orderCalculation, {
-            orderId: 'TEMP-' + Date.now(), // Temporary ID, will update after order creation
-            orderType: finalOrderType,
-            employeeId: user.uid,
-            employeeName: userProfile?.name || user.email,
-            exhibitionId: exhibitionId,
-            customer: {
-              name: formData.customerName,
-              phone: formData.customerPhone,
-              address: formData.customerAddress || ''
-            }
-          });
-          
-          console.log('Generated bill:', bill);
-        } catch (billError) {
-          console.error('Bill generation error:', billError);
-          throw new Error('Bill generation failed: ' + billError.message);
-        }
+            address: formData.customerAddress || ''
+          }
+        });
+        
+        console.log('Generated bill:', bill);
+      } catch (billError) {
+        console.error('Bill generation error:', billError);
+        throw new Error('Bill generation failed: ' + billError.message);
       }
       
-      // Only create orders if bill generation succeeded (or if it's a pre-booking)
+      // Deduct stock only for completed orders (NOT for pre-bookings)
       // Deduct stock for completed orders (not pre-bookings)
       if (orderType !== 'prebooking') {
         try {
@@ -797,19 +790,6 @@ const EmployeeDashboard = () => {
                       )}
                     </div>
 
-                    <div className="emp-form-row">
-                      <div className="emp-form-group">
-                        <label className="emp-label">Quantity</label>
-                        <input
-                          type="number"
-                          className="emp-input"
-                          value={selectedQuantity}
-                          onChange={(e) => setSelectedQuantity(parseInt(e.target.value) || 1)}
-                          min="1"
-                        />
-                      </div>
-                    </div>
-
                     {/* Cart Display */}
                     {cart.length > 0 && (
                       <div className="emp-cart-display" style={{ marginTop: '16px', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
@@ -947,21 +927,25 @@ const EmployeeDashboard = () => {
 
                     {orderType === 'prebooking' && (
                       <div className="emp-form-group" style={{ marginTop: '16px' }}>
-                        <label className="emp-label">Delivery Date *</label>
+                        <label className="emp-label">Delivery Date & Time *</label>
                         <input
-                          type="date"
+                          type="datetime-local"
                           className="emp-input"
                           value={formData.deliveryDate}
                           onChange={(e) => setFormData({...formData, deliveryDate: e.target.value})}
                           required
+                          min={new Date().toISOString().slice(0, 16)}
                         />
+                        <small style={{ display: 'block', marginTop: '4px', color: '#64748b', fontSize: '12px' }}>
+                          Pre-booking will auto-convert to sale at delivery time
+                        </small>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Payment Recording Section (STEP 6) - Only for completed orders */}
-                {orderType !== 'prebooking' && cart.length > 0 && (() => {
+                {/* Payment Recording Section (STEP 6) - For all order types including pre-booking */}
+                {cart.length > 0 && (() => {
                   try {
                     const orderCalc = calculateOrder({ items: cart, employeeDiscount: 0 });
                     const totalAmount = Math.round(orderCalc.summary.grandTotal);
@@ -969,7 +953,7 @@ const EmployeeDashboard = () => {
                     return (
                       <div style={{ marginTop: '20px', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '2px solid #0f172a' }}>
                         <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
-                          💳 Payment Details
+                          💳 Payment Details {orderType === 'prebooking' && <span style={{ fontSize: '12px', fontWeight: '400', color: '#64748b' }}>(Advance Payment)</span>}
                         </h4>
                         
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
@@ -1015,8 +999,11 @@ const EmployeeDashboard = () => {
                           </div>
                         </div>
                         
-                        <div style={{ padding: '8px', background: '#d1fae5', borderRadius: '4px', fontSize: '11px', color: '#065f46' }}>
-                          ℹ️ Payment will be recorded when order is created
+                        <div style={{ padding: '8px', background: orderType === 'prebooking' ? '#fef3c7' : '#d1fae5', borderRadius: '4px', fontSize: '11px', color: orderType === 'prebooking' ? '#92400e' : '#065f46' }}>
+                          {orderType === 'prebooking' 
+                            ? '💰 Advance payment will be recorded for this pre-booking'
+                            : 'ℹ️ Payment will be recorded when order is created'
+                          }
                         </div>
                       </div>
                     );
@@ -1048,53 +1035,85 @@ const EmployeeDashboard = () => {
               </div>
               
               <div className="emp-prebookings-grid">
-                {preBookings.map(booking => (
-                  <div key={booking.id} className="emp-prebooking-card">
-                    <div className="emp-prebooking-header">
-                      <span className="emp-prebooking-phone">{booking.customerPhone}</span>
-                      <span className="emp-badge emp-badge-warning">Pending</span>
-                    </div>
-                    <div className="emp-prebooking-details">
-                      <div className="emp-prebooking-row">
-                        <span className="emp-prebooking-label">Product</span>
-                        <span className="emp-prebooking-value">
-                          {booking.items && booking.items.length > 0 
-                            ? booking.items.map(item => `${item.productName} (${item.quantity})`).join(', ')
-                            : 'N/A'}
-                        </span>
-                      </div>
-                      <div className="emp-prebooking-row">
-                        <span className="emp-prebooking-label">Amount</span>
-                        <span className="emp-prebooking-value">
-                          ₹{(() => {
-                            // Try to get from totals first
-                            if (booking.totals?.payableAmount) {
-                              return booking.totals.payableAmount;
-                            }
-                            // Fallback: calculate from items for old pre-bookings
-                            if (booking.items && booking.items.length > 0) {
-                              const total = booking.items.reduce((sum, item) => {
-                                return sum + (item.lineTotal || (item.unitPrice * item.quantity));
-                              }, 0);
-                              return Math.round(total);
-                            }
-                            return 0;
-                          })()}
-                        </span>
-                      </div>
-                      <div className="emp-prebooking-row">
-                        <span className="emp-prebooking-label">Delivery</span>
-                        <span className="emp-prebooking-value">{booking.deliveryDate}</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleConvertPreBooking(booking.id)}
-                      className="emp-btn emp-btn-success emp-btn-sm emp-btn-block"
+                {preBookings.map(booking => {
+                  // Check if delivery time has passed
+                  const deliveryTime = new Date(booking.deliveryDate);
+                  const now = new Date();
+                  const isOverdue = deliveryTime <= now;
+                  
+                  return (
+                    <div 
+                      key={booking.id} 
+                      className="emp-prebooking-card"
+                      style={{
+                        borderLeft: isOverdue ? '4px solid #ef4444' : '4px solid #f59e0b',
+                        backgroundColor: isOverdue ? '#fef2f2' : 'white'
+                      }}
                     >
-                      Convert to Sale
-                    </button>
-                  </div>
-                ))}
+                      <div className="emp-prebooking-header">
+                        <span className="emp-prebooking-phone">{booking.customerPhone}</span>
+                        <span className={`emp-badge ${isOverdue ? 'emp-badge-danger' : 'emp-badge-warning'}`}>
+                          {isOverdue ? '🔴 Ready' : 'Pending'}
+                        </span>
+                      </div>
+                      <div className="emp-prebooking-details">
+                        <div className="emp-prebooking-row">
+                          <span className="emp-prebooking-label">Product</span>
+                          <span className="emp-prebooking-value">
+                            {booking.items && booking.items.length > 0 
+                              ? booking.items.map(item => `${item.productName} (${item.quantity})`).join(', ')
+                              : 'N/A'}
+                          </span>
+                        </div>
+                        <div className="emp-prebooking-row">
+                          <span className="emp-prebooking-label">Amount</span>
+                          <span className="emp-prebooking-value">
+                            ₹{(() => {
+                              // Try to get from totals first
+                              if (booking.totals?.payableAmount) {
+                                return booking.totals.payableAmount;
+                              }
+                              // Fallback: calculate from items for old pre-bookings
+                              if (booking.items && booking.items.length > 0) {
+                                const total = booking.items.reduce((sum, item) => {
+                                  return sum + (item.lineTotal || (item.unitPrice * item.quantity));
+                                }, 0);
+                                return Math.round(total);
+                              }
+                              return 0;
+                            })()}
+                          </span>
+                        </div>
+                        <div className="emp-prebooking-row">
+                          <span className="emp-prebooking-label">Delivery</span>
+                          <span className="emp-prebooking-value" style={{ 
+                            color: isOverdue ? '#dc2626' : 'inherit',
+                            fontWeight: isOverdue ? '600' : 'normal'
+                          }}>
+                            {new Date(booking.deliveryDate).toLocaleString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                            {isOverdue && <span style={{ marginLeft: '6px' }}>⏰</span>}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleConvertPreBooking(booking.id)}
+                        className="emp-btn emp-btn-success emp-btn-sm emp-btn-block"
+                        style={{
+                          background: isOverdue ? '#dc2626' : '#10b981',
+                          animation: isOverdue ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none'
+                        }}
+                      >
+                        {isOverdue ? '🔥 Convert Now' : 'Convert to Sale'}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
