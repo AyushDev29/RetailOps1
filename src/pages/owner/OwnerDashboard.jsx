@@ -69,7 +69,7 @@ const OwnerDashboard = () => {
   // SKU Auto-generation state
   const [isSkuManuallyEdited, setIsSkuManuallyEdited] = useState(false);
 
-  // Auto-generate SKU
+  // Auto-generate SKU with sequential numbering
   useEffect(() => {
     // Don't auto-generate if manually edited or if we are editing an existing product
     if (isSkuManuallyEdited || editingProduct) {
@@ -83,22 +83,377 @@ const OwnerDashboard = () => {
 
     const cat = (productForm.category || '').substring(0, 3).toUpperCase();
     const sub = (productForm.subcategory || '').substring(0, 3).toUpperCase();
-    const nameParts = (productForm.name || '').split(' ');
-    // Use first 3 letters of first word, or if short, padding? Just first 3 chars of name is fine
     const name = (productForm.name || '').substring(0, 3).toUpperCase();
 
-    // Generate a secure random 4-digit number
-    // using a static seed based on contents to avoid jitter would be nice, but random is okay for now
-    // To avoid jitter while typing, maybe only update if the base parts change? 
-    // Actually, random is important for uniqueness. Let's stick to simple random for now.
-    // To prevent it from changing on every keystroke of the SAME 3 letters, we can check if the prefix matches?
-    // But simplest is just generate. The user will see it updating live.
-    const rand = Math.floor(1000 + Math.random() * 9000);
-
-    const autoSku = `${cat}-${sub}-${name}-${rand}`;
+    // Generate sequential number based on existing products with same prefix
+    const prefix = `${cat}-${sub}-${name}`;
+    
+    // Find all existing products with the same prefix
+    const matchingProducts = products.filter(p => p.sku && p.sku.startsWith(prefix));
+    
+    // Extract numbers from matching SKUs and find the highest
+    let maxNumber = 0;
+    matchingProducts.forEach(p => {
+      const parts = p.sku.split('-');
+      if (parts.length === 4) {
+        const num = parseInt(parts[3]);
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    });
+    
+    // Next sequential number
+    const nextNumber = (maxNumber + 1).toString().padStart(3, '0');
+    const autoSku = `${prefix}-${nextNumber}`;
 
     setProductForm(prev => ({ ...prev, sku: autoSku }));
-  }, [productForm.category, productForm.subcategory, productForm.name.substring(0, 3), isSkuManuallyEdited, editingProduct]);
+  }, [productForm.category, productForm.subcategory, productForm.name.substring(0, 3), isSkuManuallyEdited, editingProduct, products]);
+
+  // Smart Subcategory Predictor - Comprehensive clothing database
+  useEffect(() => {
+    // Don't auto-fill if editing existing product
+    if (editingProduct) {
+      return;
+    }
+
+    // Don't run if subcategory already has content (user manually filled it)
+    if (productForm.subcategory && productForm.subcategory.trim().length > 0) {
+      return;
+    }
+
+    const productName = productForm.name.toLowerCase().trim();
+    
+    if (!productName || productName.length < 2) return;
+
+    console.log('Predicting subcategory for:', productName); // Debug log
+
+    // Comprehensive clothing subcategory mapping with multiple keywords
+    const subcategoryMap = {
+      // TOPS - Casual
+      'tshirt': 'T-Shirt',
+      't-shirt': 'T-Shirt',
+      'tee': 'T-Shirt',
+      't shirt': 'T-Shirt',
+      'round neck': 'T-Shirt',
+      'v-neck': 'T-Shirt',
+      'v neck': 'T-Shirt',
+      'henley': 'Henley',
+      'polo': 'Polo Shirt',
+      'polo shirt': 'Polo Shirt',
+      'collar tee': 'Polo Shirt',
+      
+      // TOPS - Formal
+      'shirt': 'Shirt',
+      'formal shirt': 'Formal Shirt',
+      'dress shirt': 'Formal Shirt',
+      'office shirt': 'Formal Shirt',
+      'business shirt': 'Formal Shirt',
+      'casual shirt': 'Casual Shirt',
+      'denim shirt': 'Denim Shirt',
+      'linen shirt': 'Linen Shirt',
+      'cotton shirt': 'Cotton Shirt',
+      'check shirt': 'Check Shirt',
+      'checkered': 'Check Shirt',
+      'striped shirt': 'Striped Shirt',
+      'printed shirt': 'Printed Shirt',
+      
+      // TOPS - Women's
+      'blouse': 'Blouse',
+      'top': 'Top',
+      'tunic': 'Tunic',
+      'peplum': 'Peplum Top',
+      'crop': 'Crop Top',
+      'crop top': 'Crop Top',
+      'tank': 'Tank Top',
+      'tank top': 'Tank Top',
+      'cami': 'Camisole',
+      'camisole': 'Camisole',
+      'halter': 'Halter Top',
+      'off shoulder': 'Off-Shoulder Top',
+      'cold shoulder': 'Cold-Shoulder Top',
+      'tube': 'Tube Top',
+      'bustier': 'Bustier',
+      'corset': 'Corset Top',
+      
+      // OUTERWEAR
+      'jacket': 'Jacket',
+      'blazer': 'Blazer',
+      'coat': 'Coat',
+      'overcoat': 'Overcoat',
+      'trench': 'Trench Coat',
+      'parka': 'Parka',
+      'bomber': 'Bomber Jacket',
+      'denim jacket': 'Denim Jacket',
+      'leather jacket': 'Leather Jacket',
+      'windcheater': 'Windcheater',
+      'raincoat': 'Raincoat',
+      'poncho': 'Poncho',
+      'cape': 'Cape',
+      'shrug': 'Shrug',
+      'cardigan': 'Cardigan',
+      'sweater': 'Sweater',
+      'pullover': 'Pullover',
+      'sweatshirt': 'Sweatshirt',
+      'hoodie': 'Hoodie',
+      'hooded': 'Hoodie',
+      'fleece': 'Fleece Jacket',
+      'puffer': 'Puffer Jacket',
+      'quilted': 'Quilted Jacket',
+      'waistcoat': 'Waistcoat',
+      'vest': 'Vest',
+      'gilet': 'Gilet',
+      
+      // BOTTOMS - Pants
+      'jeans': 'Jeans',
+      'denim': 'Jeans',
+      'pant': 'Pants',
+      'pants': 'Pants',
+      'trouser': 'Trousers',
+      'trousers': 'Trousers',
+      'chino': 'Chinos',
+      'khaki': 'Khakis',
+      'cargo': 'Cargo Pants',
+      'jogger': 'Joggers',
+      'track pant': 'Track Pants',
+      'sweatpant': 'Sweatpants',
+      'palazzo': 'Palazzo',
+      'culottes': 'Culottes',
+      'capri': 'Capris',
+      'cigarette': 'Cigarette Pants',
+      'straight': 'Straight Pants',
+      'bootcut': 'Bootcut Pants',
+      'flared': 'Flared Pants',
+      'wide leg': 'Wide Leg Pants',
+      'tapered': 'Tapered Pants',
+      
+      // BOTTOMS - Shorts & Skirts
+      'short': 'Shorts',
+      'shorts': 'Shorts',
+      'bermuda': 'Bermuda Shorts',
+      'hot pants': 'Hot Pants',
+      'cycling short': 'Cycling Shorts',
+      'skirt': 'Skirt',
+      'mini skirt': 'Mini Skirt',
+      'midi skirt': 'Midi Skirt',
+      'maxi skirt': 'Maxi Skirt',
+      'pencil skirt': 'Pencil Skirt',
+      'a-line': 'A-Line Skirt',
+      'pleated': 'Pleated Skirt',
+      'wrap skirt': 'Wrap Skirt',
+      'denim skirt': 'Denim Skirt',
+      
+      // BOTTOMS - Leggings & Tights
+      'legging': 'Leggings',
+      'leggings': 'Leggings',
+      'jegging': 'Jeggings',
+      'tregging': 'Treggings',
+      'tight': 'Tights',
+      'tights': 'Tights',
+      'stocking': 'Stockings',
+      
+      // DRESSES
+      'dress': 'Dress',
+      'gown': 'Gown',
+      'evening gown': 'Evening Gown',
+      'ball gown': 'Ball Gown',
+      'maxi dress': 'Maxi Dress',
+      'midi dress': 'Midi Dress',
+      'mini dress': 'Mini Dress',
+      'shift dress': 'Shift Dress',
+      'sheath dress': 'Sheath Dress',
+      'bodycon': 'Bodycon Dress',
+      'wrap dress': 'Wrap Dress',
+      'shirt dress': 'Shirt Dress',
+      'sundress': 'Sundress',
+      'cocktail': 'Cocktail Dress',
+      'party dress': 'Party Dress',
+      'prom': 'Prom Dress',
+      'wedding dress': 'Wedding Dress',
+      'bridesmaid': 'Bridesmaid Dress',
+      'jumpsuit': 'Jumpsuit',
+      'romper': 'Romper',
+      'playsuit': 'Playsuit',
+      'dungaree': 'Dungarees',
+      'overall': 'Overalls',
+      
+      // TRADITIONAL INDIAN - Women
+      'kurti': 'Kurti',
+      'kurta': 'Kurta',
+      'kameez': 'Kameez',
+      'salwar': 'Salwar Suit',
+      'churidar': 'Churidar',
+      'anarkali': 'Anarkali',
+      'patiala': 'Patiala',
+      'dhoti pant': 'Dhoti Pants',
+      'saree': 'Saree',
+      'sari': 'Saree',
+      'lehenga': 'Lehenga',
+      'ghagra': 'Ghagra',
+      'choli': 'Choli',
+      'blouse piece': 'Saree Blouse',
+      'dupatta': 'Dupatta',
+      'stole': 'Stole',
+      'shawl': 'Shawl',
+      'odhni': 'Odhni',
+      'sharara': 'Sharara',
+      'gharara': 'Gharara',
+      
+      // TRADITIONAL INDIAN - Men
+      'sherwani': 'Sherwani',
+      'achkan': 'Achkan',
+      'bandhgala': 'Bandhgala',
+      'nehru jacket': 'Nehru Jacket',
+      'modi jacket': 'Modi Jacket',
+      'pathani': 'Pathani Suit',
+      'dhoti': 'Dhoti',
+      'lungi': 'Lungi',
+      'mundu': 'Mundu',
+      'kurta pajama': 'Kurta Pajama',
+      'kurta pyjama': 'Kurta Pajama',
+      
+      // INNERWEAR - Women
+      'bra': 'Bra',
+      'brassiere': 'Bra',
+      'sports bra': 'Sports Bra',
+      'push up': 'Push-Up Bra',
+      'padded bra': 'Padded Bra',
+      'wireless': 'Wireless Bra',
+      'strapless': 'Strapless Bra',
+      'panty': 'Panties',
+      'panties': 'Panties',
+      'brief': 'Briefs',
+      'bikini brief': 'Bikini Briefs',
+      'thong': 'Thong',
+      'g-string': 'G-String',
+      'boyshort': 'Boyshorts',
+      'hipster': 'Hipster',
+      'slip': 'Slip',
+      'petticoat': 'Petticoat',
+      'shapewear': 'Shapewear',
+      'bodysuit': 'Bodysuit',
+      
+      // INNERWEAR - Men
+      'boxer': 'Boxers',
+      'boxer brief': 'Boxer Briefs',
+      'trunk': 'Trunks',
+      'brief': 'Briefs',
+      'underwear': 'Underwear',
+      'under': 'Underwear',
+      'innerwear': 'Innerwear',
+      'inner': 'Innerwear',
+      'vest': 'Vest',
+      'undershirt': 'Undershirt',
+      'singlet': 'Singlet',
+      
+      // ACTIVEWEAR & SPORTSWEAR
+      'gym': 'Gym Wear',
+      'sport': 'Sports Wear',
+      'athletic': 'Athletic Wear',
+      'yoga': 'Yoga Wear',
+      'yoga pant': 'Yoga Pants',
+      'track suit': 'Track Suit',
+      'tracksuit': 'Track Suit',
+      'training': 'Training Wear',
+      'running': 'Running Wear',
+      'cycling': 'Cycling Wear',
+      'compression': 'Compression Wear',
+      'rashguard': 'Rashguard',
+      'swimwear': 'Swimwear',
+      'swimsuit': 'Swimsuit',
+      'bikini': 'Bikini',
+      'swim trunk': 'Swim Trunks',
+      'board short': 'Board Shorts',
+      
+      // SLEEPWEAR & LOUNGEWEAR
+      'pajama': 'Pajamas',
+      'pyjama': 'Pajamas',
+      'nightwear': 'Nightwear',
+      'nightgown': 'Nightgown',
+      'nightdress': 'Nightdress',
+      'nightsuit': 'Night Suit',
+      'sleep shirt': 'Sleep Shirt',
+      'sleep short': 'Sleep Shorts',
+      'robe': 'Robe',
+      'bathrobe': 'Bathrobe',
+      'dressing gown': 'Dressing Gown',
+      'lounge': 'Loungewear',
+      'loungewear': 'Loungewear',
+      'homewear': 'Homewear',
+      
+      // ACCESSORIES - Neckwear
+      'scarf': 'Scarf',
+      'muffler': 'Muffler',
+      'necktie': 'Necktie',
+      'tie': 'Tie',
+      'bow tie': 'Bow Tie',
+      'cravat': 'Cravat',
+      'ascot': 'Ascot',
+      'bandana': 'Bandana',
+      
+      // ACCESSORIES - Headwear
+      'cap': 'Cap',
+      'hat': 'Hat',
+      'beanie': 'Beanie',
+      'beret': 'Beret',
+      'fedora': 'Fedora',
+      'bucket hat': 'Bucket Hat',
+      'sun hat': 'Sun Hat',
+      'turban': 'Turban',
+      'headband': 'Headband',
+      'hair band': 'Hair Band',
+      
+      // ACCESSORIES - Others
+      'belt': 'Belt',
+      'suspender': 'Suspenders',
+      'glove': 'Gloves',
+      'mitten': 'Mittens',
+      'sock': 'Socks',
+      'stocking': 'Stockings',
+      'handkerchief': 'Handkerchief',
+      'pocket square': 'Pocket Square',
+      'arm warmer': 'Arm Warmers',
+      'leg warmer': 'Leg Warmers',
+      
+      // MATERNITY & KIDS
+      'maternity': 'Maternity Wear',
+      'nursing': 'Nursing Wear',
+      'baby': 'Baby Wear',
+      'infant': 'Infant Wear',
+      'toddler': 'Toddler Wear',
+      'kids': 'Kids Wear',
+      'children': 'Children Wear',
+      'onesie': 'Onesie',
+      'romper': 'Romper',
+      'bib': 'Bib',
+      
+      // SPECIAL OCCASION
+      'bridal': 'Bridal Wear',
+      'wedding': 'Wedding Wear',
+      'party': 'Party Wear',
+      'festive': 'Festive Wear',
+      'ethnic': 'Ethnic Wear',
+      'formal': 'Formal Wear',
+      'casual': 'Casual Wear',
+      'smart casual': 'Smart Casual',
+      'business': 'Business Wear',
+      'workwear': 'Workwear',
+      'uniform': 'Uniform'
+    };
+
+    // Find matching subcategory - prioritize longer matches first
+    const sortedEntries = Object.entries(subcategoryMap).sort((a, b) => b[0].length - a[0].length);
+    
+    for (const [keyword, subcategory] of sortedEntries) {
+      if (productName.includes(keyword)) {
+        console.log('Match found! Keyword:', keyword, '-> Subcategory:', subcategory); // Debug log
+        setProductForm(prev => ({ ...prev, subcategory }));
+        return;
+      }
+    }
+    
+    console.log('No match found for:', productName); // Debug log
+  }, [productForm.name, editingProduct]); // Only watch name and editingProduct, not subcategory
 
   // Filters
   const [orderTypeFilter, setOrderTypeFilter] = useState('all');
