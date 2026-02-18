@@ -460,6 +460,7 @@ const OwnerDashboard = () => {
   // Lookup maps for resolving IDs to names
   const [userMap, setUserMap] = useState({});
   const [productMap, setProductMap] = useState({});
+  const [exhibitionMap, setExhibitionMap] = useState({});
 
   // Load data based on active tab
   useEffect(() => {
@@ -489,16 +490,23 @@ const OwnerDashboard = () => {
         ]);
         setExhibitions(exhibitionsData);
         // Build user map for employee name resolution
-        const map = {};
+        const uMap = {};
         usersData.forEach(u => {
-          map[u.id] = u.name || u.email;
+          uMap[u.id] = u.name || u.email;
         });
-        setUserMap(map);
+        setUserMap(uMap);
+        // Build exhibition map for location lookup
+        const exMap = {};
+        exhibitionsData.forEach(ex => {
+          exMap[ex.id] = ex.location;
+        });
+        setExhibitionMap(exMap);
       } else if (activeTab === 'orders') {
-        const [ordersData, usersData, productsData] = await Promise.all([
+        const [ordersData, usersData, productsData, exhibitionsData] = await Promise.all([
           getAllOrders(),
           getAllUsers(),
-          getAllProducts()
+          getAllProducts(),
+          getAllExhibitions()
         ]);
         
         // Resolve customer names for orders that have phone numbers as names
@@ -541,6 +549,13 @@ const OwnerDashboard = () => {
           pMap[p.id] = p.name;
         });
         setProductMap(pMap);
+        
+        // Build exhibition map for location lookup
+        const exMap = {};
+        exhibitionsData.forEach(ex => {
+          exMap[ex.id] = ex.location;
+        });
+        setExhibitionMap(exMap);
       }
     } catch (err) {
       setError('Failed to load data: ' + err.message);
@@ -967,6 +982,12 @@ const OwnerDashboard = () => {
 
       // Get employee details
       const employee = users.find(u => u.id === order.createdBy);
+      
+      // Get exhibition location if this is an exhibition order
+      let exhibitionLocation = null;
+      if (order.type === 'exhibition' && order.exhibitionId) {
+        exhibitionLocation = exhibitionMap[order.exhibitionId] || null;
+      }
 
       // Calculate order
       const orderCalculation = calculateOrder({
@@ -981,6 +1002,7 @@ const OwnerDashboard = () => {
         employeeId: order.createdBy,
         employeeName: employee?.name || employee?.email || 'Unknown',
         exhibitionId: order.exhibitionId || null,
+        exhibitionLocation: exhibitionLocation,
         customer: {
           name: order.customerName || order._resolvedCustomerName || order.customerPhone,
           phone: order.customerPhone,
@@ -1069,7 +1091,18 @@ const OwnerDashboard = () => {
   const uniqueEmployees = [...new Set(orders.map(o => o.createdBy))];
 
   if (loading) {
-    return <div className="dashboard-loading">Loading...</div>;
+    return (
+      <div className="owner-dashboard">
+        <div className="dashboard-loading">
+          <div className="loading-spinner-modern">
+            <div className="spinner-ring"></div>
+            <div className="spinner-ring"></div>
+            <div className="spinner-ring"></div>
+          </div>
+          <p style={{ marginTop: '20px', color: '#64748b', fontSize: '14px' }}>Loading dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1742,6 +1775,7 @@ const OwnerDashboard = () => {
                 <thead>
                   <tr>
                     <th>Type</th>
+                    <th>Exhibition Location</th>
                     <th>Customer Name</th>
                     <th>Customer Phone</th>
                     <th>Items</th>
@@ -1766,6 +1800,23 @@ const OwnerDashboard = () => {
                           <span className="type-badge">
                             {order.type === 'daily' ? 'Store' : order.type === 'exhibition' ? 'Exhibition' : 'Pre-Booking'}
                           </span>
+                        </td>
+                        <td>
+                          {order.type === 'exhibition' && order.exhibitionId ? (
+                            <span style={{ 
+                              fontSize: '13px', 
+                              fontWeight: '500',
+                              color: '#6366f1',
+                              background: '#eef2ff',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              display: 'inline-block'
+                            }}>
+                              📍 {exhibitionMap[order.exhibitionId] || 'Unknown Location'}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#9ca3af', fontSize: '12px' }}>—</span>
+                          )}
                         </td>
                         <td>
                           {(() => {

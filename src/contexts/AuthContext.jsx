@@ -10,6 +10,14 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    let minLoadingTime = null;
+    const startTime = Date.now();
+    
+    // Set minimum loading time of 800ms to prevent flash
+    minLoadingTime = setTimeout(() => {
+      minLoadingTime = null;
+    }, 800);
+
     const unsubscribe = subscribeToAuthChanges(async (firebaseUser) => {
       if (firebaseUser) {
         // User is logged in, fetch their profile
@@ -26,10 +34,22 @@ export function AuthProvider({ children }) {
         setUser(null);
         setUserProfile(null);
       }
-      setLoading(false);
+      
+      // Wait for minimum loading time before hiding loader
+      const elapsedTime = Date.now() - startTime;
+      const remainingTime = Math.max(0, 800 - elapsedTime);
+      
+      setTimeout(() => {
+        setLoading(false);
+      }, remainingTime);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (minLoadingTime) {
+        clearTimeout(minLoadingTime);
+      }
+    };
   }, []);
 
   const login = async (email, password) => {

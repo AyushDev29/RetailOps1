@@ -320,6 +320,13 @@ const EmployeeDashboard = () => {
         
         console.log('Order calculation:', orderCalculation);
         
+        // Get exhibition location if this is an exhibition sale
+        let exhibitionLocation = null;
+        if (orderType === 'exhibition' && selectedExhibition) {
+          const exhibition = activeExhibitions.find(ex => ex.id === selectedExhibition);
+          exhibitionLocation = exhibition?.location || null;
+        }
+        
         // Generate bill for all order types
         bill = generateBill(orderCalculation, {
           orderId: 'TEMP-' + Date.now(), // Temporary ID, will update after order creation
@@ -327,6 +334,7 @@ const EmployeeDashboard = () => {
           employeeId: user.uid,
           employeeName: userProfile?.name || user.email,
           exhibitionId: exhibitionId,
+          exhibitionLocation: exhibitionLocation,
           customer: {
             name: formData.customerName,
             phone: formData.customerPhone,
@@ -562,8 +570,12 @@ const EmployeeDashboard = () => {
     return (
       <div className="emp-dashboard">
         <div className="emp-loading">
-          <div className="loading-spinner"></div>
-          <p>Loading dashboard...</p>
+          <div className="loading-spinner-modern">
+            <div className="spinner-ring"></div>
+            <div className="spinner-ring"></div>
+            <div className="spinner-ring"></div>
+          </div>
+          <p style={{ marginTop: '20px', color: '#64748b', fontSize: '14px' }}>Loading dashboard...</p>
         </div>
       </div>
     );

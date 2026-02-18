@@ -149,6 +149,7 @@ export const generateBill = (orderCalculation, metadata) => {
     employeeId: metadata.employeeId,
     employeeName: metadata.employeeName,
     exhibitionId: metadata.exhibitionId || null,
+    exhibitionLocation: metadata.exhibitionLocation || null,
     
     // Seller Info
     seller: {

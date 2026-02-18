@@ -315,8 +315,8 @@ const BillPreview = ({ bill, onClose, onPaymentRecorded }) => {
             <p><strong>Bill No:</strong> {bill.billNumber}</p>
             <p><strong>Date:</strong> {formatDate(bill.billDate)}</p>
             <p><strong>Order Type:</strong> {bill.orderType.toUpperCase()}</p>
-            {bill.exhibitionId && (
-              <p><strong>Exhibition ID:</strong> {bill.exhibitionId}</p>
+            {bill.exhibitionLocation && (
+              <p><strong>Exhibition:</strong> 📍 {bill.exhibitionLocation}</p>
             )}
             <p><strong>Employee:</strong> {bill.employeeName}</p>
           </div>
