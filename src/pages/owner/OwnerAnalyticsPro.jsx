@@ -8,6 +8,7 @@ import {
   Legend, ResponsiveContainer
 } from 'recharts';
 import { exportAnalyticsData } from '../../utils/excelUtils';
+import MaharashtraExhibitionMap from '../../components/maps/MaharashtraExhibitionMap';
 import '../../styles/OwnerAnalyticsPro.css';
 
 const OwnerAnalyticsPro = () => {
@@ -23,7 +24,39 @@ const OwnerAnalyticsPro = () => {
     employee: 'all'
   });
 
+  const [mapData, setMapData] = useState({
+    exhibitions: [],
+    orders: [],
+    loading: true
+  });
+
   const { analytics, loading, error, employees, categories } = useOwnerAnalyticsPro(filters);
+
+  // Load exhibitions and orders for the map
+  useEffect(() => {
+    loadMapData();
+  }, []);
+
+  const loadMapData = async () => {
+    try {
+      const { getAllExhibitions } = await import('../../services/exhibitionService');
+      const { getAllOrders } = await import('../../services/orderService');
+      
+      const [exhibitionsData, ordersData] = await Promise.all([
+        getAllExhibitions(),
+        getAllOrders()
+      ]);
+      
+      setMapData({
+        exhibitions: exhibitionsData,
+        orders: ordersData.filter(o => o.status === 'completed'),
+        loading: false
+      });
+    } catch (err) {
+      console.error('Error loading map data:', err);
+      setMapData(prev => ({ ...prev, loading: false }));
+    }
+  };
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -1004,6 +1037,16 @@ const OwnerAnalyticsPro = () => {
 
         {/* Exhibitions Timeline Section */}
         <ExhibitionsTimeline />
+
+        {/* Maharashtra Exhibition Map */}
+        {!mapData.loading && (
+          <div className="chart-card chart-wide" style={{ gridColumn: '1 / -1' }}>
+            <MaharashtraExhibitionMap 
+              exhibitions={mapData.exhibitions} 
+              orders={mapData.orders}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
