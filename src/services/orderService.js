@@ -191,6 +191,7 @@ export const getPendingPreBookings = async (employeeId = null, isOwner = false) 
 
 /**
  * Convert pre-booking to final sale
+ * IMPORTANT: Just updates status, does NOT generate new bill (bill already exists)
  * @param {string} preBookingId - Pre-booking order ID
  * @param {string|null} exhibitionId - Exhibition ID if converting at exhibition
  * @returns {Object} Updated order data
@@ -214,96 +215,38 @@ export const convertPreBookingToSale = async (preBookingId, exhibitionId = null)
       throw new Error('Pre-booking already converted');
     }
     
-    // KEEP TYPE AS PREBOOKING - don't change to daily or exhibition
-    // This ensures analytics track it correctly as a pre-booking sale
+    // IMPORTANT: No time restriction for manual conversion
+    // Employee can convert anytime
     
-    // Import required services
-    const { generateBill } = await import('./billingService');
-    const { saveBill } = await import('./billStorageService');
-    const { deductStockBatch, getProductById } = await import('./productService');
-    const { calculateOrder } = await import('./orderCalculationService');
+    // Import required services for stock deduction only
+    const { deductStockBatch } = await import('./productService');
     
-    // Fetch full product details for each item to get GST rates and other required fields
-    const itemsWithProductDetails = await Promise.all(
-      orderData.items.map(async (item) => {
-        const product = await getProductById(item.productId);
-        if (!product) {
-          throw new Error(`Product not found: ${item.productId}`);
-        }
-        return {
-          productId: item.productId,
-          name: item.productName,
-          sku: product.sku,
-          category: product.category,
-          quantity: item.quantity,
-          unitBasePrice: product.basePrice,
-          unitSalePrice: product.isOnSale ? product.salePrice : null,
-          gstRate: product.gstRate,
-          isTaxInclusive: product.isTaxInclusive
-        };
-      })
-    );
-    
-    // Calculate order totals
-    const orderCalculation = calculateOrder({
-      items: itemsWithProductDetails,
-      employeeDiscount: 0
-    });
-    
-    // Generate bill for the order - use 'prebooking' as orderType
-    const bill = generateBill(orderCalculation, {
-      orderId: preBookingId,
-      orderType: 'prebooking',
-      employeeId: orderData.createdBy,
-      employeeName: orderData.employeeName || 'Employee',
-      exhibitionId: exhibitionId || null,
-      customer: {
-        name: orderData.customerName || 'Customer',
-        phone: orderData.customerPhone,
-        address: orderData.customerAddress || ''
-      }
-    });
-    
-    // Store the bill
-    const billId = await saveBill(bill);
-    
-    // Record payment if provided (STEP 6)
-    // Note: Payment should be collected when converting pre-booking
-    // For now, we'll mark it as UNPAID and let employee record payment after conversion
-    // Future enhancement: Add payment UI to conversion flow
-    
-    // Deduct stock
+    // Deduct stock when converting to sale
     if (orderData.items && Array.isArray(orderData.items)) {
-      // New schema - multiple items
       const stockItems = orderData.items.map(item => ({
         productId: item.productId,
         quantity: item.quantity
       }));
       await deductStockBatch(stockItems);
-    } else if (orderData.productId) {
-      // Old schema - single product
-      await deductStockBatch([{
-        productId: orderData.productId,
-        quantity: orderData.quantity
-      }]);
+      console.log('✅ Stock deducted for pre-booking conversion');
     }
     
-    // Update order to completed - KEEP TYPE AS PREBOOKING
+    // Update order status to completed
+    // Bill already exists from pre-booking creation, just update status
     await updateDoc(orderRef, {
       status: 'completed',
       exhibitionId: exhibitionId || null,
-      billId: billId,
       convertedAt: serverTimestamp(),
       completedAt: serverTimestamp()
     });
+    
+    console.log('✅ Pre-booking converted to sale (status updated)');
     
     return {
       id: preBookingId,
       ...orderData,
       status: 'completed',
-      exhibitionId,
-      billId: billId,
-      bill: bill
+      exhibitionId
     };
   } catch (error) {
     console.error('Error converting pre-booking:', error);
@@ -379,5 +322,105 @@ export const getAllOrders = async () => {
   } catch (error) {
     console.error('Error fetching all orders:', error);
     throw error;
+  }
+};
+
+/**
+ * Auto-convert overdue pre-bookings to sales
+ * This should be called periodically (e.g., on dashboard load)
+ * ONLY converts pre-bookings AFTER delivery time has passed
+ * @param {string} employeeId - Employee UID (optional for owner)
+ * @param {boolean} isOwner - Whether the user is owner
+ * @returns {Object} Conversion results { converted: number, failed: number, errors: Array }
+ */
+export const autoConvertOverduePreBookings = async (employeeId = null, isOwner = false) => {
+  try {
+    // Get all pending pre-bookings
+    const pendingPreBookings = await getPendingPreBookings(employeeId, isOwner);
+    
+    const now = new Date();
+    const results = {
+      converted: 0,
+      failed: 0,
+      errors: []
+    };
+    
+    // Filter ONLY overdue pre-bookings (delivery time has passed)
+    const overdueBookings = pendingPreBookings.filter(booking => {
+      if (!booking.deliveryDate) return false;
+      const deliveryTime = new Date(booking.deliveryDate);
+      return now >= deliveryTime; // Only auto-convert AFTER delivery time
+    });
+    
+    if (overdueBookings.length > 0) {
+      console.log(`[Auto-Convert] Found ${overdueBookings.length} overdue pre-bookings to convert`);
+    }
+    
+    // Convert each overdue booking
+    for (const booking of overdueBookings) {
+      try {
+        await convertPreBookingToSale(booking.id, null);
+        results.converted++;
+        console.log(`[Auto-Convert] ✅ Converted overdue pre-booking: ${booking.id}`);
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          bookingId: booking.id,
+          error: error.message
+        });
+        console.error(`[Auto-Convert] ❌ Failed to convert pre-booking ${booking.id}:`, error);
+      }
+    }
+    
+    return results;
+  } catch (error) {
+    console.error('[Auto-Convert] Error in auto-convert overdue pre-bookings:', error);
+    throw error;
+  }
+};
+
+/**
+ * Check if a pre-booking can be converted (delivery time has passed)
+ * @param {string} preBookingId - Pre-booking order ID
+ * @returns {Object} { canConvert: boolean, reason: string, timeRemaining: number }
+ */
+export const canConvertPreBooking = async (preBookingId) => {
+  try {
+    const orderDoc = await getDoc(doc(db, 'orders', preBookingId));
+    
+    if (!orderDoc.exists()) {
+      return { canConvert: false, reason: 'Pre-booking not found', timeRemaining: 0 };
+    }
+    
+    const orderData = orderDoc.data();
+    
+    if (orderData.type !== 'prebooking') {
+      return { canConvert: false, reason: 'Order is not a pre-booking', timeRemaining: 0 };
+    }
+    
+    if (orderData.status !== 'pending') {
+      return { canConvert: false, reason: 'Pre-booking already converted', timeRemaining: 0 };
+    }
+    
+    if (!orderData.deliveryDate) {
+      return { canConvert: true, reason: 'No delivery date set', timeRemaining: 0 };
+    }
+    
+    const deliveryTime = new Date(orderData.deliveryDate);
+    const now = new Date();
+    
+    if (now >= deliveryTime) {
+      return { canConvert: true, reason: 'Delivery time has passed', timeRemaining: 0 };
+    } else {
+      const timeRemaining = Math.ceil((deliveryTime - now) / (1000 * 60)); // minutes
+      return { 
+        canConvert: false, 
+        reason: `Delivery time not reached yet`, 
+        timeRemaining: timeRemaining 
+      };
+    }
+  } catch (error) {
+    console.error('Error checking if pre-booking can be converted:', error);
+    return { canConvert: false, reason: error.message, timeRemaining: 0 };
   }
 };

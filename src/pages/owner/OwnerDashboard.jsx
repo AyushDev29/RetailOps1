@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useView } from '../../contexts/ViewContext';
+import { useAutoConvertPreBookings } from '../../hooks/useAutoConvertPreBookings';
 import { getAllUsers, updateUser } from '../../services/authService';
 import { getAllProducts, createProduct, updateProduct, toggleProductActive, deductStockBatch, deleteProduct } from '../../services/productService';
 import { seedProducts } from '../../utils/seedProducts';
@@ -68,6 +69,21 @@ const OwnerDashboard = () => {
 
   // SKU Auto-generation state
   const [isSkuManuallyEdited, setIsSkuManuallyEdited] = useState(false);
+
+  // Auto-convert overdue pre-bookings every minute
+  useAutoConvertPreBookings(
+    user?.uid,
+    true, // isOwner
+    true, // enabled
+    (results) => {
+      // Callback when conversions happen
+      if (results.converted > 0) {
+        setSuccess(`${results.converted} pre-booking(s) automatically converted to sales`);
+        loadData(); // Reload data to update UI
+      }
+    },
+    60000 // Check every 60 seconds (1 minute)
+  );
 
   // Auto-generate SKU with sequential numbering
   useEffect(() => {

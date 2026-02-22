@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useView } from '../../contexts/ViewContext';
+import { useAutoConvertPreBookings } from '../../hooks/useAutoConvertPreBookings';
 import { getActiveProducts } from '../../services/productService';
 import { getAllActiveExhibitions } from '../../services/exhibitionService';
 import { createOrder, getPendingPreBookings, convertPreBookingToSale } from '../../services/orderService';
@@ -76,6 +77,21 @@ const EmployeeDashboard = () => {
   const [paymentMode, setPaymentMode] = useState('CASH');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentReferenceId, setPaymentReferenceId] = useState('');
+
+  // Auto-convert overdue pre-bookings every minute
+  useAutoConvertPreBookings(
+    user?.uid,
+    userProfile?.role === 'owner',
+    true, // enabled
+    (results) => {
+      // Callback when conversions happen
+      if (results.converted > 0) {
+        setSuccess(`${results.converted} pre-booking(s) automatically converted to sales`);
+        loadData(); // Reload data to update UI
+      }
+    },
+    60000 // Check every 60 seconds (1 minute)
+  );
 
   // Clean up invalid cart items on mount
   useEffect(() => {
@@ -298,7 +314,7 @@ const EmployeeDashboard = () => {
         exhibitionId = null;
       }
       
-      // Generate bill for ALL order types (including pre-bookings)
+      // Generate bill for ALL order types INCLUDING pre-bookings
       let bill = null;
       try {
         // Validate cart items before processing
@@ -337,7 +353,7 @@ const EmployeeDashboard = () => {
           exhibitionLocation = exhibition?.location || null;
         }
         
-        // Generate bill for all order types
+        // Generate bill for ALL order types (including pre-bookings)
         bill = generateBill(orderCalculation, {
           orderId: 'TEMP-' + Date.now(), // Temporary ID, will update after order creation
           orderType: finalOrderType,
